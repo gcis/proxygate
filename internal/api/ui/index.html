@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProxyGate - Reverse Proxy Manager</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Mobile header bar (hidden on desktop) -->
+    <div class="mobile-header" id="mobileHeader">
+        <button class="hamburger" id="hamburgerBtn" onclick="toggleSidebar()" aria-label="Toggle navigation" aria-expanded="false" aria-controls="sidebar">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+        <span class="mobile-logo">ProxyGate</span>
+    </div>
+
+    <!-- Sidebar overlay (mobile only) -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+    <div id="app">
+        <nav class="sidebar" id="sidebar">
+            <div class="logo">
+                <h1>ProxyGate</h1>
+                <span class="version">v0.1.0</span>
+            </div>
+            <ul class="nav-links">
+                <li><a href="#" data-page="dashboard" class="active">Dashboard</a></li>
+                <li><a href="#" data-page="routes">Proxy Routes</a></li>
+                <li><a href="#" data-page="certificates">Certificates</a></li>
+                <li><a href="#" data-page="dns">DNS Management</a></li>
+                <li><a href="#" data-page="settings">Settings</a></li>
+            </ul>
+            <div class="connection-status" id="wsStatus">
+                <span class="status-dot disconnected"></span>
+                <span>Disconnected</span>
+            </div>
+        </nav>
+
+        <main class="content">
+            <!-- Dashboard -->
+            <section id="page-dashboard" class="page active">
+                <h2>Dashboard</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>Active Routes</h3>
+                        <span class="stat-value" id="activeRoutes">0</span>
+                    </div>
+                    <div class="stat-card">
+                        <h3>TLS Enabled</h3>
+                        <span class="stat-value" id="tlsRoutes">0</span>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Pending Certs</h3>
+                        <span class="stat-value" id="pendingCerts">0</span>
+                    </div>
+                    <div class="stat-card">
+                        <h3>GoDaddy</h3>
+                        <span class="stat-value" id="godaddyStatus">Not configured</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>Route Overview</h3>
+                    <table class="data-table" id="dashboardRoutes">
+                        <thead>
+                            <tr>
+                                <th>Domain</th>
+                                <th>Target</th>
+                                <th>TLS</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+
+                <div class="card">
+                    <h3>Live Events</h3>
+                    <div id="eventLog" class="event-log"></div>
+                </div>
+            </section>
+
+            <!-- Routes -->
+            <section id="page-routes" class="page">
+                <div class="page-header">
+                    <h2>Proxy Routes</h2>
+                    <button class="btn btn-primary" onclick="showAddRouteModal()">+ Add Route</button>
+                </div>
+
+                <div id="routesList" class="routes-grid"></div>
+            </section>
+
+            <!-- Certificates -->
+            <section id="page-certificates" class="page">
+                <h2>TLS Certificates</h2>
+                <div class="card">
+                    <h3>Request Certificate (Let's Encrypt)</h3>
+                    <p class="help-text">Request a free TLS certificate using DNS-01 challenge. Follow the step-by-step process below.</p>
+
+                    <div class="acme-steps">
+                        <div class="step" id="step1">
+                            <h4>Step 1: Select Domain</h4>
+                            <div class="form-group">
+                                <label>Domain</label>
+                                <input type="text" id="acmeDomain" placeholder="example.com">
+                            </div>
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="acmeAutoDNS">
+                                    Auto-create DNS record via GoDaddy
+                                </label>
+                            </div>
+                            <button class="btn btn-primary" onclick="requestCertificate()">Request Certificate</button>
+                        </div>
+
+                        <div class="step hidden" id="step2">
+                            <h4>Step 2: Create DNS Record</h4>
+                            <div class="dns-instructions">
+                                <p>Create the following DNS TXT record:</p>
+                                <div class="code-block">
+                                    <div><strong>Name:</strong> <code id="dnsRecordName"></code></div>
+                                    <div><strong>Value:</strong> <code id="dnsRecordValue"></code></div>
+                                </div>
+                                <p id="autoDNSStatus" class="hidden"></p>
+                            </div>
+                            <button class="btn btn-primary" onclick="completeCertificate()">Verify & Complete</button>
+                            <div id="certProgress" class="progress hidden">
+                                <div class="progress-bar"></div>
+                                <span>Verifying DNS record...</span>
+                            </div>
+                        </div>
+
+                        <div class="step hidden" id="step3">
+                            <h4>Step 3: Certificate Issued!</h4>
+                            <div class="success-box">
+                                <p>Certificate has been issued and configured.</p>
+                                <div id="certDetails"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>Active Challenges</h3>
+                    <div id="challengesList"></div>
+                </div>
+            </section>
+
+            <!-- DNS Management -->
+            <section id="page-dns" class="page">
+                <h2>DNS Management (GoDaddy)</h2>
+
+                <div class="card" id="godaddySetup">
+                    <h3>GoDaddy API Configuration</h3>
+                    <div class="form-group">
+                        <label>API Key</label>
+                        <input type="text" id="gdApiKey" placeholder="Your GoDaddy API Key">
+                    </div>
+                    <div class="form-group">
+                        <label>API Secret</label>
+                        <input type="password" id="gdApiSecret" placeholder="Your GoDaddy API Secret">
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="saveGoDaddyConfig()">Save</button>
+                        <button class="btn btn-secondary" onclick="verifyGoDaddy()">Test Connection</button>
+                    </div>
+                    <div id="gdVerifyResult" class="hidden"></div>
+                </div>
+
+                <div class="card">
+                    <h3>Domains</h3>
+                    <button class="btn btn-secondary" onclick="loadGoDaddyDomains()">Refresh Domains</button>
+                    <div id="gdDomainsList" class="domains-list"></div>
+                </div>
+
+                <div class="card">
+                    <h3>Quick DNS Record</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Domain</label>
+                            <input type="text" id="quickDnsDomain" placeholder="example.com">
+                        </div>
+                        <div class="form-group">
+                            <label>Type</label>
+                            <select id="quickDnsType">
+                                <option value="A">A</option>
+                                <option value="CNAME">CNAME</option>
+                                <option value="TXT">TXT</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Name</label>
+                            <input type="text" id="quickDnsName" placeholder="@">
+                        </div>
+                        <div class="form-group">
+                            <label>Value</label>
+                            <input type="text" id="quickDnsValue" placeholder="192.168.1.1">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="createQuickDNS()">Create Record</button>
+                </div>
+
+                <div class="card">
+                    <h3>DNS Records</h3>
+                    <div class="form-group">
+                        <label>Select Domain</label>
+                        <select id="dnsRecordsDomain" onchange="loadDNSRecords()">
+                            <option value="">Select a domain...</option>
+                        </select>
+                    </div>
+                    <table class="data-table" id="dnsRecordsTable">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Name</th>
+                                <th>Value</th>
+                                <th>TTL</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Settings -->
+            <section id="page-settings" class="page">
+                <h2>Settings</h2>
+
+                <div class="card">
+                    <h3>Server Configuration</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>HTTP Port</label>
+                            <input type="number" id="httpPort" value="80">
+                        </div>
+                        <div class="form-group">
+                            <label>HTTPS Port</label>
+                            <input type="number" id="httpsPort" value="443">
+                        </div>
+                        <div class="form-group">
+                            <label>Admin Port</label>
+                            <input type="number" id="adminPort" value="9090">
+                        </div>
+                        <div class="form-group">
+                            <label>Admin Host</label>
+                            <input type="text" id="adminHost" value="127.0.0.1">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Allowed Networks (CIDR notation, comma-separated)</label>
+                        <input type="text" id="allowedNetworks" value="127.0.0.0/8, ::1/128" placeholder="127.0.0.0/8, ::1/128, 192.168.1.0/24">
+                        <p class="help-text">IP networks allowed to access the admin UI. Use CIDR notation. Leave empty to restrict to localhost only.</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="saveServerConfig()">Save Server Config</button>
+                </div>
+
+                <div class="card">
+                    <h3>ACME / Let's Encrypt</h3>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="acmeEmail" placeholder="admin@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="acmeStaging" checked>
+                            Use Staging (recommended for testing)
+                        </label>
+                    </div>
+                    <button class="btn btn-primary" onclick="saveACMEConfig()">Save ACME Config</button>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Add Route Modal -->
+    <div class="modal hidden" id="addRouteModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="routeModalTitle">Add Proxy Route</h3>
+                <button class="modal-close" onclick="closeModal('addRouteModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editRouteId">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="routeName" placeholder="My Service">
+                </div>
+                <div class="form-group">
+                    <label>Domain</label>
+                    <input type="text" id="routeDomain" placeholder="app.example.com">
+                </div>
+                <div class="form-group">
+                    <label>Target Host</label>
+                    <input type="text" id="routeTargetHost" placeholder="127.0.0.1">
+                </div>
+                <div class="form-group">
+                    <label>Target Port</label>
+                    <input type="number" id="routeTargetPort" placeholder="3000">
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="routeEnabled" checked>
+                        Enabled
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="routeTLS">
+                        Enable TLS
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('addRouteModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveRoute()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProxyGate API Reference</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #09090b;
+            --bg-raised: #111114;
+            --bg-card: #16161a;
+            --bg-card-hover: #1c1c22;
+            --text: #fafafa;
+            --text-secondary: #a1a1aa;
+            --text-muted: #63636e;
+            --accent: #a78bfa;
+            --teal: #2dd4bf;
+            --rose: #fb7185;
+            --amber: #fbbf24;
+            --border: rgba(255, 255, 255, 0.06);
+            --border-hover: rgba(255, 255, 255, 0.12);
+            --radius: 12px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .layout {
+            display: flex;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* Sidebar nav */
+        .sidebar {
+            width: 220px;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            padding: 32px 0 32px 24px;
+            overflow-y: auto;
+            border-right: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .sidebar a.back {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.78rem;
+            margin-bottom: 24px;
+            transition: color 0.2s;
+        }
+
+        .sidebar a.back:hover { color: var(--accent); }
+
+        .sidebar h2 {
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: var(--accent);
+        }
+
+        .sidebar .nav-group {
+            margin-bottom: 20px;
+        }
+
+        .sidebar .nav-group h3 {
+            font-size: 0.68rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .sidebar .nav-group a {
+            display: block;
+            padding: 4px 0;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .sidebar .nav-group a:hover { color: var(--accent); }
+
+        /* Main content */
+        .content {
+            flex: 1;
+            padding: 32px 40px 80px;
+            min-width: 0;
+        }
+
+        .content h1 {
+            font-size: 2rem;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            margin-bottom: 8px;
+        }
+
+        .content > p.intro {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            margin-bottom: 12px;
+        }
+
+        .base-url {
+            display: inline-block;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px 14px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+            color: var(--teal);
+            margin-bottom: 40px;
+        }
+
+        /* Endpoint groups */
+        .endpoint-group {
+            margin-bottom: 48px;
+        }
+
+        .endpoint-group h2 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            margin-bottom: 6px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+        }
+
+        .endpoint-group > p {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-bottom: 20px;
+        }
+
+        /* Endpoint card */
+        .endpoint {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            margin-bottom: 12px;
+            overflow: hidden;
+        }
+
+        .endpoint-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 18px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .endpoint-header:hover {
+            background: var(--bg-card-hover);
+        }
+
+        .method {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-size: 0.68rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: 0.03em;
+            min-width: 42px;
+            text-align: center;
+        }
+
+        .method.get { background: rgba(45,212,191,0.12); color: var(--teal); }
+        .method.post { background: rgba(167,139,250,0.12); color: var(--accent); }
+        .method.put { background: rgba(251,191,36,0.12); color: var(--amber); }
+        .method.del { background: rgba(251,113,133,0.12); color: var(--rose); }
+
+        .endpoint-path {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.84rem;
+            color: var(--text-secondary);
+        }
+
+        .endpoint-path .param {
+            color: var(--amber);
+        }
+
+        .endpoint-desc {
+            color: var(--text-muted);
+            font-size: 0.82rem;
+            margin-left: auto;
+        }
+
+        .endpoint-details {
+            padding: 0 18px 16px;
+            border-top: 1px solid var(--border);
+        }
+
+        .endpoint-details h4 {
+            font-size: 0.72rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-muted);
+            margin: 14px 0 8px;
+        }
+
+        .endpoint-details pre {
+            background: var(--bg-raised);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px 16px;
+            overflow-x: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+
+        .endpoint-details .key { color: var(--accent); }
+        .endpoint-details .str { color: var(--teal); }
+        .endpoint-details .num { color: var(--amber); }
+        .endpoint-details .bool { color: var(--rose); }
+
+        .endpoint-details p {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .content { padding: 24px 20px 60px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <nav class="sidebar">
+            <a href="./" class="back">&larr; Back to ProxyGate</a>
+            <h2>API Reference</h2>
+
+            <div class="nav-group">
+                <h3>Configuration</h3>
+                <a href="#config">Get Config</a>
+                <a href="#update-server">Update Server</a>
+            </div>
+            <div class="nav-group">
+                <h3>Proxy Routes</h3>
+                <a href="#list-routes">List Routes</a>
+                <a href="#create-route">Create Route</a>
+                <a href="#get-route">Get Route</a>
+                <a href="#update-route">Update Route</a>
+                <a href="#delete-route">Delete Route</a>
+                <a href="#status">Proxy Status</a>
+            </div>
+            <div class="nav-group">
+                <h3>Certificates</h3>
+                <a href="#acme-request">Request Certificate</a>
+                <a href="#acme-complete">Complete Challenge</a>
+                <a href="#acme-challenges">List Challenges</a>
+                <a href="#acme-config">ACME Config</a>
+            </div>
+            <div class="nav-group">
+                <h3>GoDaddy DNS</h3>
+                <a href="#gd-config">GoDaddy Config</a>
+                <a href="#gd-verify">Verify Connection</a>
+                <a href="#gd-domains">List Domains</a>
+                <a href="#gd-records">DNS Records</a>
+                <a href="#gd-auto">Auto DNS</a>
+            </div>
+            <div class="nav-group">
+                <h3>Real-time</h3>
+                <a href="#websocket">WebSocket</a>
+            </div>
+        </nav>
+
+        <main class="content">
+            <h1>API Reference</h1>
+            <p class="intro">ProxyGate exposes a REST API on the admin port for managing routes, certificates, and DNS records. All endpoints accept and return JSON.</p>
+            <div class="base-url">Base URL: http://127.0.0.1:9090/api</div>
+
+            <!-- Configuration -->
+            <div class="endpoint-group" id="config">
+                <h2>Configuration</h2>
+                <p>Read and update the ProxyGate server configuration.</p>
+
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-path">/api/config</span>
+                        <span class="endpoint-desc">Get current configuration</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <h4>Response</h4>
+                        <pre>{
+  <span class="key">"server"</span>: { <span class="key">"http_port"</span>: <span class="num">80</span>, <span class="key">"https_port"</span>: <span class="num">443</span>, <span class="key">"admin_port"</span>: <span class="num">9090</span>, <span class="key">"admin_host"</span>: <span class="str">"127.0.0.1"</span>, <span class="key">"allowed_networks"</span>: [<span class="str">"127.0.0.0/8"</span>] },
+  <span class="key">"routes"</span>: [...],
+  <span class="key">"godaddy"</span>: { <span class="key">"api_key"</span>: <span class="str">"********"</span> },
+  <span class="key">"acme"</span>: { <span class="key">"email"</span>: <span class="str">"admin@example.com"</span>, <span class="key">"use_staging"</span>: <span class="bool">true</span> }
+}</pre>
+                        <p>Note: GoDaddy API secret is redacted in the response.</p>
+                    </div>
+                </div>
+
+                <div class="endpoint" id="update-server">
+                    <div class="endpoint-header">
+                        <span class="method put">PUT</span>
+                        <span class="endpoint-path">/api/config/server</span>
+                        <span class="endpoint-desc">Update server configuration</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <h4>Request Body</h4>
+                        <pre>{
+  <span class="key">"http_port"</span>: <span class="num">80</span>,
+  <span class="key">"https_port"</span>: <span class="num">443</span>,
+  <span class="key">"admin_port"</span>: <span class="num">9090</span>,
+  <span class="key">"admin_host"</span>: <span class="str">"127.0.0.1"</span>,
+  <span class="key">"allowed_networks"</span>: [<span class="str">"127.0.0.0/8"</span>, <span class="str">"192.168.1.0/24"</span>]
+}</pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Routes -->
+            <div class="endpoint-group" id="list-routes">
+                <h2>Proxy Routes</h2>
+                <p>Manage reverse proxy routes. Changes take effect immediately without restart.</p>
+
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-path">/api/routes</span>
+                        <span class="endpoint-desc">List all routes</span>
+                    </div>
+                </div>
+
+                <div class="endpoint" id="create-route">
+                    <div class="endpoint-header">
+                        <span class="method post">POST</span>
+                        <span class="endpoint-path">/api/routes</span>
+                        <span class="endpoint-desc">Create a new route</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <h4>Request Body</h4>
+                        <pre>{
+  <span class="key">"name"</span>: <span class="str">"My App"</span>,
+  <span class="key">"domain"</span>: <span class="str">"app.example.com"</span>,
+  <span class="key">"target_host"</span>: <span class="str">"127.0.0.1"</span>,
+  <span class="key">"target_port"</span>: <span class="num">3000</span>,
+  <span class="key">"tls_enabled"</span>: <span class="bool">false</span>,
+  <span class="key">"enabled"</span>: <span class="bool">true</span>
+}</pre>
+                    </div>
+                </div>
+
+                <div class="endpoint" id="get-route">
+                    <div class="endpoint-header">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-path">/api/routes/<span class="param">{id}</span></span>
+                        <span class="endpoint-desc">Get a specific route</span>
+                    </div>
+                </div>
+
+                <div class="endpoint" id="update-route">
+                    <div class="endpoint-header">
+                        <span class="method put">PUT</span>
+                        <span class="endpoint-path">/api/routes/<span class="param">{id}</span></span>
+                        <span class="endpoint-desc">Update a route</span>
+                    </div>
+                </div>
+
+                <div class="endpoint" id="delete-route">
+                    <div class="endpoint-header">
+                        <span class="method del">DEL</span>
+                        <span class="endpoint-path">/api/routes/<span class="param">{id}</span></span>
+                        <span class="endpoint-desc">Delete a route</span>
+                    </div>
+                </div>
+
+                <div class="endpoint" id="status">
+                    <div class="endpoint-header">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-path">/api/status</span>
+                        <span class="endpoint-desc">Proxy status and health</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ACME -->
+            <div class="endpoint-group" id="acme-request">
+                <h2>TLS Certificates (ACME)</h2>
+                <p>Request and manage Let's Encrypt certificates using DNS-01 challenge.</p>
+
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method post">POST</span>
+                        <span class="endpoint-path">/api/acme/request</span>
+                        <span class="endpoint-desc">Initiate certificate request</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <h4>Request Body</h4>
+                        <pre>{ <span class="key">"domain"</span>: <span class="str">"app.example.com"</span> }</pre>
+                        <h4>Response</h4>
+                        <pre>{
+  <span class="key">"domain"</span>: <span class="str">"app.example.com"</span>,
+  <span class="key">"status"</span>: <span class="str">"pending"</span>,
+  <span class="key">"record_name"</span>: <span class="str">"_acme-challenge.app.example.com"</span>,
+  <span class="key">"record_value"</span>: <span class="str">"dGVzdC12YWx1ZQ..."</span>
+}</pre>
+                        <p>Create the returned TXT record at your DNS provider, then call the complete endpoint.</p>
+                    </div>
+                </div>
+
+                <div class="endpoint" id="acme-complete">
+                    <div class="endpoint-header">
+                        <span class="method post">POST</span>
+                        <span class="endpoint-path">/api/acme/complete</span>
+                        <span class="endpoint-desc">Verify challenge and fetch certificate</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <h4>Request Body</h4>
+                        <pre>{
+  <span class="key">"domain"</span>: <span class="str">"app.example.com"</span>,
+  <span class="key">"auto_dns"</span>: <span class="bool">true</span>
+}</pre>
+                        <p>Set <code>auto_dns: true</code> to automatically create the TXT record via GoDaddy before verification.</p>
+                    </div>
+                </div>
+
+                <div class="endpoint" id="acme-challenges">
+                    <div class="endpoint-header">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-path">/api/acme/challenges</span>
+                        <span class="endpoint-desc">List active ACME challenges</span>
+                    </div>
+                </div>
+
+                <div class="endpoint" id="acme-config">
+                    <div class="endpoint-header">
+                        <span class="method put">PUT</span>
+                        <span class="endpoint-path">/api/acme/config</span>
+                        <span class="endpoint-desc">Update ACME settings</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GoDaddy -->
+            <div class="endpoint-group" id="gd-config">
+                <h2>GoDaddy DNS</h2>
+                <p>Manage DNS records through the GoDaddy API. Supports A, CNAME, TXT, and other record types.</p>
+
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method put">PUT</span>
+                        <span class="endpoint-path">/api/godaddy/config</span>
+                        <span class="endpoint-desc">Update GoDaddy API credentials</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <h4>Request Body</h4>
+                        <pre>{
+  <span class="key">"api_key"</span>: <span class="str">"your-key"</span>,
+  <span class="key">"api_secret"</span>: <span class="str">"your-secret"</span>,
+  <span class="key">"base_url"</span>: <span class="str">"https://api.godaddy.com"</span>
+}</pre>
+                    </div>
+                </div>
+
+                <div class="endpoint" id="gd-verify">
+                    <div class="endpoint-header">
+                        <span class="method post">POST</span>
+                        <span class="endpoint-path">/api/godaddy/verify</span>
+                        <span class="endpoint-desc">Test API connection</span>
+                    </div>
+                </div>
+
+                <div class="endpoint" id="gd-domains">
+                    <div class="endpoint-header">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-path">/api/godaddy/domains</span>
+                        <span class="endpoint-desc">List all domains</span>
+                    </div>
+                </div>
+
+                <div class="endpoint" id="gd-records">
+                    <div class="endpoint-header">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-path">/api/godaddy/domains/<span class="param">{domain}</span>/records</span>
+                        <span class="endpoint-desc">List DNS records</span>
+                    </div>
+                </div>
+
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method post">POST</span>
+                        <span class="endpoint-path">/api/godaddy/domains/<span class="param">{domain}</span>/records</span>
+                        <span class="endpoint-desc">Create a DNS record</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <h4>Request Body</h4>
+                        <pre>{
+  <span class="key">"type"</span>: <span class="str">"A"</span>,
+  <span class="key">"name"</span>: <span class="str">"app"</span>,
+  <span class="key">"data"</span>: <span class="str">"192.168.1.100"</span>,
+  <span class="key">"ttl"</span>: <span class="num">600</span>
+}</pre>
+                    </div>
+                </div>
+
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method del">DEL</span>
+                        <span class="endpoint-path">/api/godaddy/domains/<span class="param">{domain}</span>/records/<span class="param">{type}</span>/<span class="param">{name}</span></span>
+                        <span class="endpoint-desc">Delete a DNS record</span>
+                    </div>
+                </div>
+
+                <div class="endpoint" id="gd-auto">
+                    <div class="endpoint-header">
+                        <span class="method post">POST</span>
+                        <span class="endpoint-path">/api/godaddy/auto-dns</span>
+                        <span class="endpoint-desc">Auto-create DNS for a proxy route</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <h4>Request Body</h4>
+                        <pre>{
+  <span class="key">"domain"</span>: <span class="str">"example.com"</span>,
+  <span class="key">"subdomain"</span>: <span class="str">"app"</span>,
+  <span class="key">"type"</span>: <span class="str">"A"</span>,
+  <span class="key">"value"</span>: <span class="str">"192.168.1.100"</span>
+}</pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- WebSocket -->
+            <div class="endpoint-group" id="websocket">
+                <h2>Real-time Events</h2>
+                <p>Connect via WebSocket for live updates when configuration, routes, or certificates change.</p>
+
+                <div class="endpoint">
+                    <div class="endpoint-header">
+                        <span class="method get">GET</span>
+                        <span class="endpoint-path">/ws</span>
+                        <span class="endpoint-desc">WebSocket connection</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <h4>Event Types</h4>
+                        <pre><span class="key">config_changed</span>   &mdash; Server configuration was updated
+<span class="key">route_added</span>      &mdash; A new proxy route was created
+<span class="key">route_updated</span>    &mdash; An existing route was modified
+<span class="key">route_deleted</span>    &mdash; A route was removed
+<span class="key">cert_obtained</span>    &mdash; A TLS certificate was issued
+<span class="key">acme_challenge</span>   &mdash; An ACME challenge was created
+<span class="key">dns_record_created</span> &mdash; A DNS record was created
+<span class="key">auto_dns_created</span> &mdash; Auto-DNS record was created</pre>
+                        <h4>Message Format</h4>
+                        <pre>{
+  <span class="key">"type"</span>: <span class="str">"route_added"</span>,
+  <span class="key">"payload"</span>: { ... }
+}</pre>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

@@ -251,7 +251,7 @@ func TestServerHandler_ReturnsHTTPHandler(t *testing.T) {
 
 // ─── Server.Start (error path) ───────────────────────────────────────────────
 
-func TestServerStart_PrivilegedPort_ReturnsError(t *testing.T) {
+func TestServerStart_InvalidPort_ReturnsError(t *testing.T) {
 	dir := t.TempDir()
 	cfgMgr, err := config.NewManager(filepath.Join(dir, "config.json"))
 	if err != nil {
@@ -266,9 +266,9 @@ func TestServerStart_PrivilegedPort_ReturnsError(t *testing.T) {
 	gdClient := godaddy.NewClient("", "", "https://api.godaddy.com", hSilentLogger())
 	s := api.NewServer(cfgMgr, engine, acmeClient, gdClient, nil, hSilentLogger())
 
-	// Port 1 is reserved/privileged — ListenAndServe returns immediately with error.
-	err = s.Start(":1")
+	// Port 99999 is above the valid range — ListenAndServe returns immediately with error on all OSes.
+	err = s.Start(":99999")
 	if err == nil {
-		t.Error("Start on privileged port should return an error")
+		t.Error("Start on invalid port should return an error")
 	}
 }

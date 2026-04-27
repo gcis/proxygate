@@ -31,6 +31,10 @@
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
+        html {
+            overflow-x: hidden;
+        }
+
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             background: var(--bg);
@@ -79,6 +83,7 @@
             padding: 100px 0 80px;
             text-align: center;
             position: relative;
+            overflow: hidden;
         }
 
         header::before {
@@ -398,6 +403,7 @@
         /* Screenshot with browser window chrome */
         .showcase-frame {
             position: relative;
+            overflow: hidden;
         }
 
         .screenshot-wrap {
@@ -512,6 +518,7 @@
         .showcase-stack {
             position: relative;
             padding: 60px 0 80px;
+            overflow: hidden;
         }
 
         .showcase-stack .showcase-lead {

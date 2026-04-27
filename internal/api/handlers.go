@@ -9,19 +9,21 @@ import (
 	"time"
 
 	"github.com/gcis/proxygate/internal/acme"
+	"github.com/gcis/proxygate/internal/certmanager"
 	"github.com/gcis/proxygate/internal/config"
 	"github.com/gcis/proxygate/internal/godaddy"
 	"github.com/gcis/proxygate/internal/proxy"
 )
 
 type Server struct {
-	configMgr *config.Manager
-	engine    *proxy.Engine
-	acmeClient *acme.Client
+	configMgr     *config.Manager
+	engine        *proxy.Engine
+	acmeClient    *acme.Client
 	godaddyClient *godaddy.Client
-	wsHub     *WSHub
-	logger    *slog.Logger
-	mux       *http.ServeMux
+	certMgr       *certmanager.Manager
+	wsHub         *WSHub
+	logger        *slog.Logger
+	mux           *http.ServeMux
 }
 
 func NewServer(
@@ -29,6 +31,7 @@ func NewServer(
 	engine *proxy.Engine,
 	acmeClient *acme.Client,
 	godaddyClient *godaddy.Client,
+	certMgr *certmanager.Manager,
 	logger *slog.Logger,
 ) *Server {
 	s := &Server{
@@ -36,6 +39,7 @@ func NewServer(
 		engine:        engine,
 		acmeClient:    acmeClient,
 		godaddyClient: godaddyClient,
+		certMgr:       certMgr,
 		wsHub:         NewWSHub(logger),
 		logger:        logger,
 		mux:           http.NewServeMux(),
@@ -80,6 +84,9 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("POST /api/godaddy/domains/{domain}/records", s.handleCreateDNSRecord)
 	s.mux.HandleFunc("DELETE /api/godaddy/domains/{domain}/records/{type}/{name}", s.handleDeleteDNSRecord)
 	s.mux.HandleFunc("POST /api/godaddy/auto-dns", s.handleAutoDNS)
+
+	// Certificate status
+	s.mux.HandleFunc("GET /api/certs/status", s.handleCertsStatus)
 
 	// Health check (for load balancers and k8s probes)
 	s.mux.HandleFunc("GET /healthz", s.handleHealthz)
@@ -528,6 +535,58 @@ func (s *Server) handleAutoDNS(w http.ResponseWriter, r *http.Request) {
 	s.wsHub.Broadcast(WSMessage{Type: "auto_dns_created", Payload: req})
 
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "DNS record created"})
+}
+
+// handleCertsStatus returns cert renewal metrics and per-domain expiry info.
+func (s *Server) handleCertsStatus(w http.ResponseWriter, r *http.Request) {
+	type certInfo struct {
+		Domain        string `json:"domain"`
+		CertFile      string `json:"cert_file"`
+		ExpiresAt     string `json:"expires_at,omitempty"`
+		DaysRemaining int    `json:"days_remaining,omitempty"`
+		NeedsRenewal  bool   `json:"needs_renewal"`
+		Error         string `json:"error,omitempty"`
+	}
+
+	var metrics struct {
+		RenewalSuccess int64 `json:"renewal_success"`
+		RenewalFailed  int64 `json:"renewal_failed"`
+	}
+
+	if s.certMgr != nil {
+		m := s.certMgr.GetMetrics()
+		metrics.RenewalSuccess = m.RenewalSuccess
+		metrics.RenewalFailed = m.RenewalFailed
+	}
+
+	cfg := s.configMgr.Get()
+	var certs []certInfo
+	for _, route := range cfg.Routes {
+		if !route.TLSEnabled || route.CertFile == "" {
+			continue
+		}
+		info := certInfo{
+			Domain:   route.Domain,
+			CertFile: route.CertFile,
+		}
+		if s.certMgr != nil {
+			status, err := s.certMgr.GetCertStatus(route.Domain, route.CertFile)
+			if err != nil {
+				info.Error = err.Error()
+			} else {
+				info.ExpiresAt = status.ExpiresAt.UTC().Format(time.RFC3339)
+				info.DaysRemaining = status.DaysRemaining
+				info.NeedsRenewal = status.NeedsRenewal
+			}
+		}
+		certs = append(certs, info)
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"metrics":   metrics,
+		"certs":     certs,
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	})
 }
 
 func (s *Server) Start(addr string) error {

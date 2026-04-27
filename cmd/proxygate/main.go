@@ -12,12 +12,37 @@ import (
 
 	"github.com/gcis/proxygate/internal/acme"
 	"github.com/gcis/proxygate/internal/api"
+	"github.com/gcis/proxygate/internal/certmanager"
 	"github.com/gcis/proxygate/internal/config"
 	"github.com/gcis/proxygate/internal/godaddy"
 	"github.com/gcis/proxygate/internal/proxy"
 )
 
 var version = "dev"
+
+// configProviderAdapter adapts *config.Manager (Get() *Config) to the
+// certmanager.ConfigProvider interface (Get() Config).
+type configProviderAdapter struct {
+	mgr *config.Manager
+}
+
+func (a *configProviderAdapter) Get() config.Config {
+	return *a.mgr.Get()
+}
+
+// acmeRequesterAdapter adapts *acme.Client to certmanager.CertRequester.
+// It calls RequestCertificate first (to initiate the DNS-01 challenge), then
+// CompleteChallengeAndFetchCert (which waits for propagation and retrieves the cert).
+type acmeRequesterAdapter struct {
+	client *acme.Client
+}
+
+func (a *acmeRequesterAdapter) RenewForDomain(ctx context.Context, domain string) (certPath, keyPath string, err error) {
+	if _, err = a.client.RequestCertificate(ctx, domain); err != nil {
+		return "", "", fmt.Errorf("acme request: %w", err)
+	}
+	return a.client.CompleteChallengeAndFetchCert(ctx, domain)
+}
 
 type multiFlag []string
 
@@ -107,9 +132,23 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Init certificate manager (automatic renewal + hot reload)
+	certMgr := certmanager.NewManager(
+		engine,
+		&acmeRequesterAdapter{client: acmeClient},
+		godaddyClient,
+		&configProviderAdapter{mgr: cfgMgr},
+		logger,
+	)
+
+	// Start background cert renewal checker
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	certMgr.Start(ctx)
+
 	// Init and start admin API server
 	adminAddr := fmt.Sprintf("%s:%d", cfg.Server.AdminHost, cfg.Server.AdminPort)
-	apiServer := api.NewServer(cfgMgr, engine, acmeClient, godaddyClient, logger)
+	apiServer := api.NewServer(cfgMgr, engine, acmeClient, godaddyClient, certMgr, logger)
 
 	go func() {
 		if err := apiServer.Start(adminAddr); err != nil {
@@ -129,9 +168,10 @@ func main() {
 	<-quit
 
 	logger.Info("shutting down...")
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	if err := engine.Stop(ctx); err != nil {
+	cancel() // stop background cert checker
+	shutCtx, shutCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutCancel()
+	if err := engine.Stop(shutCtx); err != nil {
 		logger.Error("proxy shutdown error", "error", err)
 	}
 	logger.Info("shutdown complete")

@@ -1,0 +1,37 @@
+{
+  "server": {
+    "http_port": 8080,
+    "https_port": 8443,
+    "admin_port": 9090,
+    "admin_host": "127.0.0.1",
+    "allowed_networks": [
+      "127.0.0.0/8",
+      "::1/128"
+    ]
+  },
+  "routes": [
+    {
+      "id": "route_example",
+      "name": "My App",
+      "domain": "app.example.com",
+      "target_host": "127.0.0.1",
+      "target_port": 3000,
+      "tls_enabled": false,
+      "auto_cert": false,
+      "enabled": true,
+      "created_at": "2025-01-01T00:00:00Z",
+      "updated_at": "2025-01-01T00:00:00Z"
+    }
+  ],
+  "godaddy": {
+    "api_key": "your-godaddy-api-key",
+    "api_secret": "your-godaddy-api-secret",
+    "base_url": "https://api.godaddy.com"
+  },
+  "acme": {
+    "email": "user@example.com",
+    "directory": "https://acme-v02.api.letsencrypt.org/directory",
+    "cert_dir": "./certs",
+    "use_staging": true
+  }
+}

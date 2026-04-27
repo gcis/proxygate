@@ -245,5 +245,5 @@ cat /proc/$(pgrep proxygate)/status | grep Cap
 | Admin UI localhost-only by default | ✅ | `admin_host: "127.0.0.1"` |
 | No runtime `setuid`/root assumption | ✅ | Capabilities only |
 | TLS authentication on admin UI | ❌ | TODO — currently relies on network allowlist |
-| Config file encryption / secrets manager | ❌ | TODO — GoDaddy keys stored in plaintext |
-| Automatic certificate renewal | ❌ | TODO — ACME certs must be renewed manually |
+| Config file encryption / secrets manager | ✅ | AES-256-GCM via `PROXYGATE_CONFIG_KEY` env var — see README |
+| Automatic certificate renewal | ✅ | Daily check; renews 30 days before expiry with hot-reload |

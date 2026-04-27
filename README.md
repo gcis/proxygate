@@ -17,8 +17,10 @@ Full docs: <https://gcis.github.io/proxygate/>
 - **Reverse Proxy** — Route HTTP/HTTPS/WebSocket traffic by domain name to local services
 - **Web Dashboard** — Manage everything through a clean, modern UI
 - **Let's Encrypt Integration** — Request free TLS certificates via DNS-01 challenge with step-by-step UI guidance
+- **Automatic Certificate Renewal** — Background daily check; certs are renewed 30 days before expiry and hot-reloaded with no restart
 - **GoDaddy DNS Management** — Create/manage DNS records directly from the UI with API key integration
 - **Automatic DNS + Cert** — One-click: create DNS record via GoDaddy, verify, and install certificate
+- **Config Encryption** — AES-256-GCM encryption for sensitive config fields (GoDaddy credentials, ACME email) at rest; key supplied via environment variable
 - **Live Reload** — WebSocket-powered real-time updates across all UI components
 - **Hot Config Reload** — Change routes without restarting the proxy
 - **Admin Network Whitelist** — Restrict admin UI access by IP/CIDR, configurable via CLI or UI
@@ -180,6 +182,68 @@ With GoDaddy configured, the entire certificate flow is automated:
 }
 ```
 
+## Configuration Encryption
+
+Sensitive fields in the config file — `godaddy.api_key`, `godaddy.api_secret`, and `acme.email` — can be encrypted at rest using AES-256-GCM.
+
+### Enabling encryption
+
+1. Generate a 32-byte key and export it:
+
+   ```bash
+   export PROXYGATE_CONFIG_KEY=$(openssl rand -hex 32)
+   ```
+
+2. Store the key securely (e.g. a systemd `EnvironmentFile`, a secrets manager, or a `.env` file that is **not** checked into version control):
+
+   ```ini
+   # /etc/proxygate/env  (mode 0600, owned by proxygate user)
+   PROXYGATE_CONFIG_KEY=<your-64-hex-char-key>
+   ```
+
+3. Start ProxyGate with the variable in scope. On first write, the config manager encrypts any plaintext sensitive fields and saves them back to disk with an `enc:` prefix.
+
+### Behaviour
+
+| Scenario | Result |
+|----------|--------|
+| `PROXYGATE_CONFIG_KEY` set, fields plaintext | Fields encrypted on next save |
+| `PROXYGATE_CONFIG_KEY` set, fields already `enc:…` | Left unchanged (idempotent) |
+| `PROXYGATE_CONFIG_KEY` absent, no encrypted fields | Runs without encryption (plaintext config) |
+| `PROXYGATE_CONFIG_KEY` absent, encrypted fields present | **Startup fails** — key required to decrypt |
+
+In memory, all fields are always plaintext; only the on-disk JSON carries the `enc:` prefix.
+
+### Key rotation
+
+To rotate the key:
+1. Start ProxyGate with the **new** key.
+2. The next config save re-encrypts all `enc:` fields with the new key automatically.
+
+---
+
+## Automatic Certificate Renewal
+
+ProxyGate runs a background goroutine that checks all TLS-enabled routes **daily** (immediately on startup, then every 24 hours). When a certificate has fewer than **30 days** of validity remaining, the full ACME DNS-01 flow is triggered automatically and the new certificate is hot-reloaded into the proxy without restarting any listener.
+
+### What happens on renewal
+
+1. `certmanager` detects expiry < 30 days via the cert's `NotAfter` field.
+2. A new DNS-01 challenge is issued via the ACME client.
+3. If GoDaddy is configured, the `_acme-challenge` TXT record is created and deleted automatically.
+4. The new cert and key are written atomically (write-to-temp + rename).
+5. The proxy engine hot-reloads the cert in memory — no port 80/443 rebind needed.
+
+### On failure
+
+Renewal errors are logged at `ERROR` level and include the domain name. The manager **continues checking other domains** — one failure does not block the rest. Metrics counters (`RenewalSuccess`, `RenewalFailed`) are exposed and can be scraped.
+
+### Override / manual renewal
+
+Use the admin UI **Certificates** page to trigger a manual certificate request at any time. The certmanager's in-flight dedup ensures concurrent manual + automatic renewals for the same domain are coalesced.
+
+---
+
 ## Deployment
 
 For full production deployment instructions — systemd with `AmbientCapabilities`,
@@ -223,7 +287,7 @@ not in source. See [docs/deployment.md](docs/deployment.md) for details.
 Known considerations:
 
 - **Admin UI** binds to `127.0.0.1` by default — do NOT expose to the internet
-- **GoDaddy API credentials** are stored in the config file — protect file permissions
+- **GoDaddy API credentials** are stored in the config file — use config encryption (see [Configuration Encryption](#configuration-encryption)) and protect file permissions
 - **ACME account key** is stored on disk — back up and protect `certs/account.key`
 - **No authentication** on the admin UI — it relies on being localhost-only
 - **TLS configuration** uses modern cipher suites but has not been formally audited
@@ -232,7 +296,7 @@ Known considerations:
 
 For production use, consider:
 - Adding authentication to the admin UI
-- Encrypting the config file or using a secrets manager
+- Enabling config encryption via `PROXYGATE_CONFIG_KEY` to protect GoDaddy credentials at rest
 - Running behind a hardened reverse proxy (nginx, Caddy) for the admin interface
 - Regular security audits and dependency updates
 - Network-level access controls

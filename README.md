@@ -1,5 +1,6 @@
 # ProxyGate
 
+[![CI](https://github.com/gcis/proxygate/actions/workflows/ci.yml/badge.svg)](https://github.com/gcis/proxygate/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-online-blue)](https://gcis.github.io/proxygate/)
 
 A lightweight, self-hosted reverse proxy with a built-in web UI for managing routes, TLS certificates (Let's Encrypt), and DNS records (GoDaddy).

@@ -1,0 +1,41 @@
+[Unit]
+Description=ProxyGate Reverse Proxy
+After=network.target
+Documentation=https://gcis.github.io/proxygate
+
+[Service]
+Type=simple
+User=proxygate
+Group=proxygate
+WorkingDirectory=/opt/proxygate
+
+# Adjust --config path if you store config elsewhere
+ExecStart=/opt/proxygate/proxygate --config /opt/proxygate/data/proxygate.json
+
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65535
+
+# Stdout/stderr go to journald — view with: journalctl -u proxygate -f
+StandardOutput=journal
+StandardError=journal
+
+# ── Security hardening ──────────────────────────────────────────────────────
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/proxygate/data /opt/proxygate/certs
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+
+# Allow binding to privileged ports (<1024) without running as root.
+# This is the recommended production approach over `sudo setcap`.
+# When http_port=80 and https_port=443 are set in config, this capability
+# lets the proxygate user bind those ports.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target

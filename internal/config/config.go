@@ -67,8 +67,8 @@ type Manager struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Server: ServerConfig{
-			HTTPPort:  80,
-			HTTPSPort: 443,
+			HTTPPort:  8080,
+			HTTPSPort: 8443,
 			AdminPort:       9090,
 			AdminHost:       "127.0.0.1",
 			AllowedNetworks: []string{"127.0.0.0/8", "::1/128"},

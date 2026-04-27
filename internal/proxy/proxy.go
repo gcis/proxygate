@@ -201,10 +201,18 @@ func (e *Engine) Start(cfg *config.Config) error {
 	}
 
 	// Start HTTP server
+	httpPort := cfg.Server.HTTPPort
 	go func() {
-		e.logger.Info("starting HTTP proxy", "port", cfg.Server.HTTPPort)
+		e.logger.Info("starting HTTP proxy", "port", httpPort)
 		if err := e.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			e.logger.Error("HTTP server error", "error", err)
+			if strings.Contains(err.Error(), "permission denied") && httpPort < 1024 {
+				e.logger.Error("cannot bind privileged port — binary needs CAP_NET_BIND_SERVICE. "+
+					"Run: sudo setcap 'cap_net_bind_service=+ep' /path/to/proxygate  "+
+					"Or change http_port to 8080 in config. See docs/deployment.md for all options.",
+					"port", httpPort)
+			} else {
+				e.logger.Error("HTTP server error", "error", err)
+			}
 		}
 	}()
 
@@ -239,10 +247,18 @@ func (e *Engine) Start(cfg *config.Config) error {
 			IdleTimeout:       120 * time.Second,
 		}
 
+		httpsPort := cfg.Server.HTTPSPort
 		go func() {
-			e.logger.Info("starting HTTPS proxy", "port", cfg.Server.HTTPSPort)
+			e.logger.Info("starting HTTPS proxy", "port", httpsPort)
 			if err := e.tlsServer.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
-				e.logger.Error("HTTPS server error", "error", err)
+				if strings.Contains(err.Error(), "permission denied") && httpsPort < 1024 {
+					e.logger.Error("cannot bind privileged port — binary needs CAP_NET_BIND_SERVICE. "+
+						"Run: sudo setcap 'cap_net_bind_service=+ep' /path/to/proxygate  "+
+						"Or change https_port to 8443 in config. See docs/deployment.md for all options.",
+						"port", httpsPort)
+				} else {
+					e.logger.Error("HTTPS server error", "error", err)
+				}
 			}
 		}()
 	}

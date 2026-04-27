@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/gcis/proxygate/internal/acme"
 	"github.com/gcis/proxygate/internal/api"
@@ -32,10 +33,16 @@ func (m *multiFlag) Set(v string) error {
 func main() {
 	var (
 		configPath      = flag.String("config", "./data/proxygate.json", "Path to config file")
+		showVersion     = flag.Bool("version", false, "Print version and exit")
 		allowedNetworks multiFlag
 	)
 	flag.Var(&allowedNetworks, "allow-network", "Allow admin UI access from this CIDR (can be repeated)")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println("proxygate", version)
+		os.Exit(0)
+	}
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
@@ -122,7 +129,7 @@ func main() {
 	<-quit
 
 	logger.Info("shutting down...")
-	ctx, cancel := context.WithTimeout(context.Background(), 10)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := engine.Stop(ctx); err != nil {
 		logger.Error("proxy shutdown error", "error", err)

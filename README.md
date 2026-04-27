@@ -66,12 +66,14 @@ ProxyGate uses a JSON configuration file (default: `./data/proxygate.json`). It'
 ./bin/proxygate --config /path/to/config.json
 ```
 
-Default ports:
+Default ports (new install):
 | Service | Port | Description |
 |---------|------|-------------|
-| HTTP Proxy | 80 | Incoming HTTP traffic |
-| HTTPS Proxy | 443 | Incoming HTTPS traffic |
+| HTTP Proxy | 8080 | Incoming HTTP traffic (change to 80 in config for production) |
+| HTTPS Proxy | 8443 | Incoming HTTPS traffic (change to 443 in config for production) |
 | Admin UI | 9090 | Management dashboard (localhost only) |
+
+> Ports 80 and 443 require `CAP_NET_BIND_SERVICE`. See **[docs/deployment.md](docs/deployment.md)** for the recommended approaches (systemd `AmbientCapabilities`, `setcap`, reverse proxy, or container capabilities).
 
 ## Usage Guide
 
@@ -146,8 +148,8 @@ With GoDaddy configured, the entire certificate flow is automated:
 ```json
 {
   "server": {
-    "http_port": 80,
-    "https_port": 443,
+    "http_port": 8080,
+    "https_port": 8443,
     "admin_port": 9090,
     "admin_host": "127.0.0.1",
     "allowed_networks": ["127.0.0.0/8", "::1/128"]
@@ -179,33 +181,39 @@ With GoDaddy configured, the entire certificate flow is automated:
 
 ## Deployment
 
-### Systemd Service
+For full production deployment instructions — systemd with `AmbientCapabilities`,
+`setcap`, reverse proxy (nginx/Caddy), and container (Docker/k8s) options — see
+**[docs/deployment.md](docs/deployment.md)**.
+
+### Quick systemd install
 
 ```bash
-# Copy binary
-sudo cp bin/proxygate /opt/proxygate/
-sudo cp proxygate.service /etc/systemd/system/
+# Build
+make build
 
-# Create user and directories
-sudo useradd -r -s /bin/false proxygate
+# Install binary and create service user
+sudo cp bin/proxygate /opt/proxygate/proxygate
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin proxygate
 sudo mkdir -p /opt/proxygate/{data,certs}
 sudo chown -R proxygate:proxygate /opt/proxygate
 
-# Enable and start
+# Install unit file (already has AmbientCapabilities=CAP_NET_BIND_SERVICE)
+sudo cp examples/systemd/proxygate.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable proxygate
-sudo systemctl start proxygate
+sudo systemctl enable --now proxygate
 ```
 
-### Running on Port 80/443
+The unit file runs ProxyGate as the `proxygate` user with `CAP_NET_BIND_SERVICE`,
+so it can bind ports 80/443 **without root**.
 
-To bind to privileged ports without running as root:
+### Running on Port 80/443 without systemd
 
 ```bash
 sudo setcap 'cap_net_bind_service=+ep' ./bin/proxygate
 ```
 
-Or use the systemd service which handles this via `AmbientCapabilities`.
+**Re-run `setcap` after every build** — capabilities are stored on the binary file,
+not in source. See [docs/deployment.md](docs/deployment.md) for details.
 
 ## Security Considerations
 

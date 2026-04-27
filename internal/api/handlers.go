@@ -81,6 +81,9 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("DELETE /api/godaddy/domains/{domain}/records/{type}/{name}", s.handleDeleteDNSRecord)
 	s.mux.HandleFunc("POST /api/godaddy/auto-dns", s.handleAutoDNS)
 
+	// Health check (for load balancers and k8s probes)
+	s.mux.HandleFunc("GET /healthz", s.handleHealthz)
+
 	// WebSocket
 	s.mux.HandleFunc("GET /ws", s.wsHub.HandleWS)
 
@@ -218,6 +221,17 @@ func (s *Server) handleDeleteRoute(w http.ResponseWriter, r *http.Request) {
 
 	s.wsHub.Broadcast(WSMessage{Type: "route_deleted", Payload: map[string]string{"id": id}})
 	jsonResponse(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// Health check handler — lightweight probe for load balancers / k8s liveness probes.
+// Returns 200 OK with a JSON body. No auth required — the network whitelist middleware
+// still applies; for k8s cluster-internal probes that should be fine.
+
+func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
+	jsonResponse(w, http.StatusOK, map[string]string{
+		"status": "ok",
+		"time":   time.Now().UTC().Format(time.RFC3339),
+	})
 }
 
 // Status handler

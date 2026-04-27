@@ -15,11 +15,11 @@ import (
 func TestDefaultConfig(t *testing.T) {
 	cfg := config.DefaultConfig()
 
-	if cfg.Server.HTTPPort != 80 {
-		t.Errorf("HTTPPort: want 80, got %d", cfg.Server.HTTPPort)
+	if cfg.Server.HTTPPort != 8080 {
+		t.Errorf("HTTPPort: want 8080, got %d", cfg.Server.HTTPPort)
 	}
-	if cfg.Server.HTTPSPort != 443 {
-		t.Errorf("HTTPSPort: want 443, got %d", cfg.Server.HTTPSPort)
+	if cfg.Server.HTTPSPort != 8443 {
+		t.Errorf("HTTPSPort: want 8443, got %d", cfg.Server.HTTPSPort)
 	}
 	if cfg.Server.AdminPort != 9090 {
 		t.Errorf("AdminPort: want 9090, got %d", cfg.Server.AdminPort)
@@ -53,8 +53,8 @@ func TestNewManager_CreatesDefaultWhenFileMissing(t *testing.T) {
 	}
 
 	cfg := mgr.Get()
-	if cfg.Server.HTTPPort != 80 {
-		t.Errorf("default HTTPPort: want 80, got %d", cfg.Server.HTTPPort)
+	if cfg.Server.HTTPPort != 8080 {
+		t.Errorf("default HTTPPort: want 8080, got %d", cfg.Server.HTTPPort)
 	}
 }
 

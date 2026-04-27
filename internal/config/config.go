@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/gcis/proxygate/internal/crypto"
 )
 
 type ProxyRoute struct {
@@ -115,17 +117,66 @@ func (m *Manager) load() error {
 		return fmt.Errorf("parsing config: %w", err)
 	}
 
+	// Handle encryption boundary:
+	//   1. If any sensitive field is encrypted, we MUST have a key to decrypt.
+	//   2. If any sensitive field is plaintext (and key is available), migrate to encrypted on disk.
+	//   3. In memory, all fields are always plaintext after load.
+	if hasSensitiveEncryptedFields(cfg) {
+		key, err := crypto.KeyFromEnv()
+		if err != nil {
+			return fmt.Errorf("config contains encrypted fields but no key available — "+
+				"set PROXYGATE_CONFIG_KEY: %w", err)
+		}
+		if err := DecryptSensitiveFields(cfg, key); err != nil {
+			return fmt.Errorf("decrypting config fields: %w", err)
+		}
+	} else if hasSensitivePlaintextFields(cfg) {
+		// Try to migrate: if a key is available, encrypt and write back
+		key, err := crypto.KeyFromEnv()
+		if err == nil {
+			// Key available — encrypt plaintext fields and persist
+			diskCfg := *cfg // shallow copy for disk write
+			if err := EncryptSensitiveFields(&diskCfg, key); err != nil {
+				return fmt.Errorf("migrating config encryption: %w", err)
+			}
+			// Write encrypted version back to disk
+			if wErr := m.writeConfig(&diskCfg); wErr != nil {
+				// Non-fatal: log would be ideal but Manager has no logger; proceed with plaintext
+				_ = wErr
+			}
+		}
+		// Regardless, in-memory config stays plaintext
+	}
+
 	m.config = cfg
 	return nil
 }
 
 func (m *Manager) save() error {
+	// Build the version to write to disk.
+	// If a key is available, encrypt sensitive fields before persisting.
+	diskCfg := *m.config
+	diskCfg.Routes = make([]ProxyRoute, len(m.config.Routes))
+	copy(diskCfg.Routes, m.config.Routes)
+
+	if key, err := crypto.KeyFromEnv(); err == nil {
+		if err := EncryptSensitiveFields(&diskCfg, key); err != nil {
+			return fmt.Errorf("encrypting config for save: %w", err)
+		}
+	}
+	// If no key is set, write plaintext (backward compatible).
+
+	return m.writeConfig(&diskCfg)
+}
+
+// writeConfig serialises cfg atomically to m.filePath via a tmp-rename.
+func (m *Manager) writeConfig(cfg *Config) error {
 	dir := filepath.Dir(m.filePath)
 	if err := os.MkdirAll(dir, 0750); err != nil {
 		return fmt.Errorf("creating config dir: %w", err)
 	}
 
-	data, err := json.MarshalIndent(m.config, "", "  ")
+	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshaling config: %w", err)
 	}

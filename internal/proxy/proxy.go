@@ -25,6 +25,7 @@ type Engine struct {
 	tlsCerts   map[string]*tls.Certificate
 	httpServer *http.Server
 	tlsServer  *http.Server
+	httpsPort  int  // remembered so EnsureHTTPSStarted can bind the right port
 	logger     *slog.Logger
 	configMgr  *config.Manager
 }
@@ -216,6 +217,9 @@ func (e *Engine) Start(cfg *config.Config) error {
 		}
 	}()
 
+	// Remember the HTTPS port for on-demand startup
+	e.httpsPort = cfg.Server.HTTPSPort
+
 	// Start HTTPS server if any routes have TLS
 	hasTLS := false
 	for _, route := range cfg.Routes {
@@ -226,44 +230,73 @@ func (e *Engine) Start(cfg *config.Config) error {
 	}
 
 	if hasTLS {
-		tlsConfig := &tls.Config{
-			GetCertificate: e.getCertificate,
-			MinVersion:     tls.VersionTLS12,
-			CipherSuites: []uint16{
-				tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-				tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-				tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-				tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-			},
-		}
-
-		e.tlsServer = &http.Server{
-			Addr:              fmt.Sprintf(":%d", cfg.Server.HTTPSPort),
-			Handler:           e,
-			TLSConfig:         tlsConfig,
-			ReadHeaderTimeout: 10 * time.Second,
-			IdleTimeout:       120 * time.Second,
-		}
-
-		httpsPort := cfg.Server.HTTPSPort
-		go func() {
-			e.logger.Info("starting HTTPS proxy", "port", httpsPort)
-			if err := e.tlsServer.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
-				if strings.Contains(err.Error(), "permission denied") && httpsPort < 1024 {
-					e.logger.Error("cannot bind privileged port — binary needs CAP_NET_BIND_SERVICE. "+
-						"Run: sudo setcap 'cap_net_bind_service=+ep' /path/to/proxygate  "+
-						"Or change https_port to 8443 in config. See docs/deployment.md for all options.",
-						"port", httpsPort)
-				} else {
-					e.logger.Error("HTTPS server error", "error", err)
-				}
-			}
-		}()
+		e.startHTTPS(cfg.Server.HTTPSPort)
 	}
 
 	return nil
+}
+
+// newTLSConfig builds the shared tls.Config used by the HTTPS listener.
+func (e *Engine) newTLSConfig() *tls.Config {
+	return &tls.Config{
+		GetCertificate: e.getCertificate,
+		MinVersion:     tls.VersionTLS12,
+		CipherSuites: []uint16{
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+		},
+	}
+}
+
+// startHTTPS starts the HTTPS listener.  Must be called with e.mu already
+// released (it acquires its own lock for tlsServer assignment).
+func (e *Engine) startHTTPS(port int) {
+	e.mu.Lock()
+	e.tlsServer = &http.Server{
+		Addr:              fmt.Sprintf(":%d", port),
+		Handler:           e,
+		TLSConfig:         e.newTLSConfig(),
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	srv := e.tlsServer
+	e.mu.Unlock()
+
+	go func() {
+		e.logger.Info("starting HTTPS proxy", "port", port)
+		if err := srv.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+			if strings.Contains(err.Error(), "permission denied") && port < 1024 {
+				e.logger.Error("cannot bind privileged port — binary needs CAP_NET_BIND_SERVICE. "+
+					"Run: sudo setcap 'cap_net_bind_service=+ep' /path/to/proxygate  "+
+					"Or change https_port to 8443 in config. See docs/deployment.md for all options.",
+					"port", port)
+			} else {
+				e.logger.Error("HTTPS server error", "error", err)
+			}
+		}
+	}()
+}
+
+// EnsureHTTPSStarted starts the HTTPS listener if it is not already running.
+// This is called by certmanager after hot-loading a new certificate so that
+// the HTTPS server comes up without a full process restart.
+func (e *Engine) EnsureHTTPSStarted() {
+	e.mu.RLock()
+	running := e.tlsServer != nil
+	port := e.httpsPort
+	e.mu.RUnlock()
+
+	if running {
+		return
+	}
+	if port == 0 {
+		port = 8443
+	}
+	e.startHTTPS(port)
 }
 
 func (e *Engine) Stop(ctx context.Context) error {

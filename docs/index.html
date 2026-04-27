@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProxyGate - Local Reverse Proxy with Web UI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #09090b;
+            --bg-raised: #111114;
+            --bg-card: #16161a;
+            --bg-card-hover: #1c1c22;
+            --text: #fafafa;
+            --text-secondary: #a1a1aa;
+            --text-muted: #63636e;
+            --accent: #a78bfa;
+            --accent-dim: rgba(167, 139, 250, 0.10);
+            --accent-glow: rgba(167, 139, 250, 0.25);
+            --teal: #2dd4bf;
+            --teal-dim: rgba(45, 212, 191, 0.10);
+            --rose: #fb7185;
+            --rose-dim: rgba(251, 113, 133, 0.08);
+            --border: rgba(255, 255, 255, 0.06);
+            --border-hover: rgba(255, 255, 255, 0.12);
+            --radius: 16px;
+            --radius-sm: 10px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 0 28px;
+        }
+
+        .container-wide {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 40px;
+        }
+
+        /* Scroll reveal animations */
+        .reveal {
+            opacity: 0;
+            transform: translateY(40px);
+            transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+                        transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .reveal.from-left {
+            transform: translateX(-60px) translateY(0);
+        }
+        .reveal.from-right {
+            transform: translateX(60px) translateY(0);
+        }
+        .reveal.visible {
+            opacity: 1;
+            transform: translateX(0) translateY(0);
+        }
+        .reveal-delay-1 { transition-delay: 0.1s; }
+        .reveal-delay-2 { transition-delay: 0.2s; }
+        .reveal-delay-3 { transition-delay: 0.3s; }
+
+        /* Hero */
+        header {
+            padding: 100px 0 80px;
+            text-align: center;
+            position: relative;
+        }
+
+        header::before {
+            content: '';
+            position: absolute;
+            top: -120px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(167, 139, 250, 0.06) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        header::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 180px;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 5px 14px;
+            background: var(--accent-dim);
+            color: var(--accent);
+            border-radius: 100px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            margin-bottom: 24px;
+            border: 1px solid rgba(167, 139, 250, 0.12);
+        }
+
+        header h1 {
+            font-size: 4.2rem;
+            font-weight: 800;
+            letter-spacing: -0.04em;
+            background: linear-gradient(145deg, #fafafa 30%, var(--accent) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 18px;
+        }
+
+        header > p {
+            font-size: 1.15rem;
+            color: var(--text-secondary);
+            max-width: 540px;
+            margin: 0 auto 32px;
+            font-weight: 400;
+        }
+
+        .disclaimer {
+            background: var(--rose-dim);
+            border: 1px solid rgba(251, 113, 133, 0.14);
+            border-radius: var(--radius-sm);
+            padding: 12px 18px;
+            margin: 0 auto 32px;
+            max-width: 580px;
+            font-size: 0.8rem;
+            color: #e8a0ab;
+            line-height: 1.55;
+        }
+
+        .disclaimer strong {
+            color: var(--rose);
+            font-weight: 600;
+        }
+
+        .cta-group {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 13px 28px;
+            border-radius: var(--radius-sm);
+            font-size: 0.88rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.25s ease;
+        }
+
+        .cta-primary {
+            background: var(--accent);
+            color: #09090b;
+        }
+        .cta-primary:hover {
+            box-shadow: 0 0 36px var(--accent-glow);
+            transform: translateY(-2px);
+        }
+
+        .cta-secondary {
+            background: var(--bg-card);
+            color: var(--text);
+            border: 1px solid var(--border-hover);
+        }
+        .cta-secondary:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--text-muted);
+            transform: translateY(-2px);
+        }
+
+        /* Sections */
+        section {
+            padding: 60px 0;
+        }
+
+        .section-header {
+            margin-bottom: 28px;
+        }
+
+        .section-header h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 6px;
+            color: var(--text);
+        }
+
+        .section-header p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        /* Features */
+        .features {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        .feature {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px 22px;
+            transition: all 0.3s ease;
+        }
+
+        .feature:hover {
+            border-color: var(--border-hover);
+            background: var(--bg-card-hover);
+            transform: translateY(-3px);
+        }
+
+        .feature-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 9px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 14px;
+        }
+
+        .feature-icon.purple { background: var(--accent-dim); }
+        .feature-icon.teal { background: var(--teal-dim); }
+        .feature-icon.rose { background: var(--rose-dim); }
+
+        .feature h3 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        .feature p {
+            color: var(--text-muted);
+            font-size: 0.82rem;
+            line-height: 1.55;
+        }
+
+        /* Architecture diagram */
+        .arch-diagram {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 36px 24px 28px;
+        }
+
+        .arch-diagram svg {
+            width: 100%;
+            max-width: 760px;
+            margin: 0 auto;
+            display: block;
+        }
+
+        /* ============================
+           PRODUCT SHOWCASE (Redesigned)
+           ============================ */
+        .showcase-section {
+            padding: 40px 0 20px;
+        }
+
+        .showcase-section > .container:first-child {
+            margin-bottom: 20px;
+        }
+
+        .showcase-section .section-header {
+            text-align: center;
+            margin-bottom: 16px;
+        }
+
+        .showcase-section .section-header h2 {
+            font-size: 2.2rem;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            background: linear-gradient(145deg, #fafafa 40%, var(--teal) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .showcase-section .section-header p {
+            font-size: 1rem;
+            max-width: 480px;
+            margin: 0 auto;
+        }
+
+        /* Showcase block: text row + full-width image */
+        .showcase-block {
+            position: relative;
+            padding: 60px 0;
+        }
+
+        .showcase-block + .showcase-block {
+            padding-top: 20px;
+        }
+
+        .showcase-meta {
+            display: flex;
+            align-items: flex-start;
+            gap: 40px;
+            margin-bottom: 36px;
+        }
+
+        .showcase-meta.align-right {
+            flex-direction: row-reverse;
+            text-align: right;
+        }
+
+        .showcase-meta.align-right .detail-list {
+            align-items: flex-end;
+        }
+
+        .showcase-lead {
+            flex: 0 0 auto;
+            max-width: 380px;
+        }
+
+        .showcase-lead .label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 100px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            margin-bottom: 14px;
+        }
+
+        .label-purple { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(167,139,250,0.15); }
+        .label-teal { background: var(--teal-dim); color: var(--teal); border: 1px solid rgba(45,212,191,0.15); }
+        .label-rose { background: var(--rose-dim); color: var(--rose); border: 1px solid rgba(251,113,133,0.15); }
+
+        .showcase-lead h3 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            letter-spacing: -0.025em;
+            line-height: 1.2;
+            margin-bottom: 10px;
+        }
+
+        .showcase-lead > p {
+            color: var(--text-secondary);
+            font-size: 0.92rem;
+            line-height: 1.65;
+        }
+
+        .showcase-aside {
+            flex: 1;
+            display: flex;
+            align-items: center;
+        }
+
+        .detail-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .detail-list li {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .detail-list li svg {
+            flex-shrink: 0;
+        }
+
+        /* Screenshot with browser window chrome */
+        .showcase-frame {
+            position: relative;
+        }
+
+        .screenshot-wrap {
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #1a1a20;
+            border: 1px solid var(--border-hover);
+            box-shadow:
+                0 4px 24px rgba(0, 0, 0, 0.4),
+                0 20px 60px rgba(0, 0, 0, 0.3),
+                0 0 0 1px rgba(255,255,255,0.03);
+            transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+                        box-shadow 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .screenshot-wrap:hover {
+            transform: translateY(-6px) scale(1.008);
+            box-shadow:
+                0 8px 40px rgba(0, 0, 0, 0.5),
+                0 30px 80px rgba(0, 0, 0, 0.4);
+        }
+
+        .screenshot-wrap::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 12px;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+            pointer-events: none;
+        }
+
+        /* Perspective tilt variants */
+        .tilt-right {
+            transform: perspective(1400px) rotateY(-2deg) rotateX(1deg);
+        }
+        .tilt-right:hover {
+            transform: perspective(1400px) rotateY(0deg) rotateX(0deg) translateY(-6px) scale(1.008);
+        }
+
+        .tilt-left {
+            transform: perspective(1400px) rotateY(2deg) rotateX(1deg);
+        }
+        .tilt-left:hover {
+            transform: perspective(1400px) rotateY(0deg) rotateX(0deg) translateY(-6px) scale(1.008);
+        }
+
+        /* Browser window title bar */
+        .window-chrome {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 12px 16px;
+            background: #1a1a20;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .window-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .window-dot.red { background: #ff5f57; }
+        .window-dot.yellow { background: #febc2e; }
+        .window-dot.green { background: #28c840; }
+
+        .window-url {
+            flex: 1;
+            margin-left: 12px;
+            padding: 5px 14px;
+            background: rgba(255,255,255,0.04);
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .screenshot-wrap img {
+            width: 100%;
+            display: block;
+        }
+
+        /* Glow orbs */
+        .glow-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .glow-purple { background: rgba(167, 139, 250, 0.18); }
+        .glow-teal { background: rgba(45, 212, 191, 0.15); }
+        .glow-rose { background: rgba(251, 113, 133, 0.14); }
+
+        /* Dot grid decoration */
+        .dot-grid {
+            position: absolute;
+            width: 120px;
+            height: 120px;
+            background-image: radial-gradient(rgba(167, 139, 250, 0.15) 1px, transparent 1px);
+            background-size: 12px 12px;
+            pointer-events: none;
+            opacity: 0.5;
+        }
+
+        /* Stacked overlap composition */
+        .showcase-stack {
+            position: relative;
+            padding: 60px 0 80px;
+        }
+
+        .showcase-stack .showcase-lead {
+            text-align: center;
+            max-width: 520px;
+            margin: 0 auto 48px;
+        }
+
+        .stack-container {
+            position: relative;
+            perspective: 1200px;
+        }
+
+        .stack-back {
+            position: relative;
+            z-index: 1;
+            transform: perspective(1200px) rotateX(2deg) scale(0.92);
+            transform-origin: center bottom;
+            opacity: 0.6;
+            transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .stack-front {
+            position: relative;
+            z-index: 2;
+            margin-top: -30px;
+            transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .stack-container:hover .stack-back {
+            transform: perspective(1200px) rotateX(0deg) scale(0.95);
+            opacity: 0.75;
+        }
+
+        .stack-container:hover .stack-front {
+            transform: translateY(-8px);
+        }
+
+        /* Code */
+        .code-block {
+            background: var(--bg-raised);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 22px 24px;
+            overflow-x: auto;
+            position: relative;
+        }
+
+        .code-block::before {
+            content: 'terminal';
+            position: absolute;
+            top: 10px;
+            right: 14px;
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            opacity: 0.6;
+        }
+
+        .code-block pre {
+            margin: 0;
+            background: none;
+            border: none;
+            padding: 0;
+        }
+
+        .code-block code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+            line-height: 1.9;
+            color: var(--text-secondary);
+            white-space: pre;
+        }
+
+        .code-block .cmd { color: var(--teal); }
+        .code-block .arg { color: var(--text); }
+        .code-block .comment { color: var(--text-muted); font-style: italic; }
+        .code-block .path { color: var(--accent); }
+
+        /* Footer */
+        footer {
+            padding: 48px 0;
+            text-align: center;
+            border-top: 1px solid var(--border);
+        }
+
+        footer p {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        footer a {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        footer a:hover { text-decoration: underline; }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .showcase-meta,
+            .showcase-meta.align-right {
+                flex-direction: column;
+                text-align: left;
+                gap: 20px;
+            }
+            .showcase-meta.align-right .detail-list {
+                align-items: flex-start;
+            }
+            .showcase-lead h3 { font-size: 1.4rem; }
+            .tilt-left, .tilt-right {
+                transform: none;
+            }
+            .stack-back {
+                transform: scale(0.95);
+            }
+        }
+
+        @media (max-width: 700px) {
+            .features { grid-template-columns: 1fr; }
+            header h1 { font-size: 2.6rem; }
+            .container-wide { padding: 0 20px; }
+            .showcase-section .section-header h2 { font-size: 1.6rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="reveal">
+                <span class="pill">Open Source Reverse Proxy</span>
+                <h1>ProxyGate</h1>
+                <p>A lightweight, self-hosted reverse proxy with a built-in web UI for managing routes, TLS certificates, and DNS records.</p>
+            </div>
+
+            <div class="reveal reveal-delay-1">
+                <div class="disclaimer">
+                    <strong>Disclaimer:</strong> This software is provided for educational and development purposes.
+                    It has not been through a formal security audit.
+                    Do not use in production environments without thorough review.
+                </div>
+            </div>
+
+            <div class="cta-group reveal reveal-delay-2">
+                <a href="https://github.com/gcis/proxygate" class="cta cta-primary">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                    View on GitHub
+                </a>
+                <a href="https://github.com/gcis/proxygate#quick-start" class="cta cta-secondary">Quick Start Guide</a>
+            </div>
+        </header>
+
+        <section>
+            <div class="section-header reveal">
+                <h2>Features</h2>
+                <p>Everything you need to proxy local services behind real domains with TLS.</p>
+            </div>
+            <div class="features">
+                <div class="feature reveal reveal-delay-1">
+                    <div class="feature-icon purple">
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" color="#a78bfa"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    </div>
+                    <h3>Reverse Proxy</h3>
+                    <p>Route HTTP/HTTPS/WebSocket traffic by domain name to local services with automatic header forwarding and hot config reload.</p>
+                </div>
+                <div class="feature reveal reveal-delay-2">
+                    <div class="feature-icon teal">
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" color="#2dd4bf"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+                    </div>
+                    <h3>Web Dashboard</h3>
+                    <p>Manage proxy routes, certificates, and DNS records through a clean, modern dark-themed admin UI.</p>
+                </div>
+                <div class="feature reveal reveal-delay-3">
+                    <div class="feature-icon rose">
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" color="#fb7185"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                    </div>
+                    <h3>Let's Encrypt</h3>
+                    <p>Request free TLS certificates via DNS-01 challenge with step-by-step guidance directly in the UI.</p>
+                </div>
+                <div class="feature reveal reveal-delay-1">
+                    <div class="feature-icon teal">
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" color="#2dd4bf"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10A15.3 15.3 0 0112 2z"/></svg>
+                    </div>
+                    <h3>GoDaddy DNS</h3>
+                    <p>Create and manage DNS records directly from the UI using the GoDaddy API. Browse domains and records.</p>
+                </div>
+                <div class="feature reveal reveal-delay-2">
+                    <div class="feature-icon purple">
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" color="#a78bfa"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                    </div>
+                    <h3>Auto Certificate Flow</h3>
+                    <p>One-click: create DNS record, verify challenge, and install certificate &mdash; fully automated.</p>
+                </div>
+                <div class="feature reveal reveal-delay-3">
+                    <div class="feature-icon rose">
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" color="#fb7185"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15"/></svg>
+                    </div>
+                    <h3>Live Reload</h3>
+                    <p>WebSocket-powered real-time updates. Config changes apply instantly without restart.</p>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <div class="section-header reveal">
+                <h2>How It Works</h2>
+                <p>A single binary that runs three servers and manages everything through a unified config.</p>
+            </div>
+            <div class="arch-diagram reveal">
+                <svg viewBox="0 0 760 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <pattern id="dots" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
+                            <circle cx="20" cy="20" r="0.5" fill="rgba(255,255,255,0.035)"/>
+                        </pattern>
+                        <marker id="arrow-teal" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="8" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M0,0 L10,4 L0,8 Z" fill="#2dd4bf" fill-opacity="0.85"/>
+                        </marker>
+                        <marker id="arrow-purple" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="8" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M0,0 L10,4 L0,8 Z" fill="#a78bfa" fill-opacity="0.85"/>
+                        </marker>
+                        <marker id="arrow-rose" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="8" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M0,0 L10,4 L0,8 Z" fill="#fb7185" fill-opacity="0.7"/>
+                        </marker>
+                    </defs>
+                    <rect width="760" height="400" fill="url(#dots)"/>
+                    <text x="12" y="68" fill="#3f3f46" font-family="Inter, sans-serif" font-size="8" font-weight="600" letter-spacing="0.1em" transform="rotate(-90, 12, 68)">ENTRY</text>
+                    <text x="12" y="210" fill="#3f3f46" font-family="Inter, sans-serif" font-size="8" font-weight="600" letter-spacing="0.1em" transform="rotate(-90, 12, 210)">TARGETS</text>
+                    <text x="12" y="345" fill="#3f3f46" font-family="Inter, sans-serif" font-size="8" font-weight="600" letter-spacing="0.1em" transform="rotate(-90, 12, 345)">INFRA</text>
+                    <rect x="50" y="30" width="170" height="72" rx="12" fill="#16161a" stroke="#a78bfa" stroke-width="1.2" stroke-opacity="0.55"/>
+                    <text x="135" y="56" text-anchor="middle" fill="#a78bfa" font-family="Inter, sans-serif" font-size="9.5" font-weight="600" letter-spacing="0.08em">INCOMING TRAFFIC</text>
+                    <text x="100" y="78" text-anchor="middle" fill="#71717a" font-family="JetBrains Mono, monospace" font-size="11" font-weight="500">:80</text>
+                    <text x="135" y="78" text-anchor="middle" fill="#3f3f46" font-family="Inter, sans-serif" font-size="11">/</text>
+                    <text x="170" y="78" text-anchor="middle" fill="#71717a" font-family="JetBrains Mono, monospace" font-size="11" font-weight="500">:443</text>
+                    <rect x="280" y="20" width="230" height="92" rx="14" fill="#16161a" stroke="#2dd4bf" stroke-width="1.2" stroke-opacity="0.55"/>
+                    <text x="395" y="48" text-anchor="middle" fill="#fafafa" font-family="Inter, sans-serif" font-size="13" font-weight="700">ProxyGate Engine</text>
+                    <text x="395" y="66" text-anchor="middle" fill="#71717a" font-family="Inter, sans-serif" font-size="9.5">Reverse Proxy + TLS Termination</text>
+                    <line x1="330" y1="78" x2="460" y2="78" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+                    <text x="395" y="96" text-anchor="middle" fill="#2dd4bf" font-family="Inter, sans-serif" font-size="9.5" font-weight="500">Dynamic Routing  &#x2022;  Hot Reload</text>
+                    <rect x="580" y="30" width="150" height="72" rx="12" fill="#16161a" stroke="#fb7185" stroke-width="1.2" stroke-opacity="0.55"/>
+                    <text x="655" y="54" text-anchor="middle" fill="#fca5a5" font-family="Inter, sans-serif" font-size="9.5" font-weight="600" letter-spacing="0.06em">ADMIN UI</text>
+                    <text x="655" y="74" text-anchor="middle" fill="#a1a1aa" font-family="JetBrains Mono, monospace" font-size="11" font-weight="500">:9090</text>
+                    <text x="655" y="90" text-anchor="middle" fill="#52525b" font-family="Inter, sans-serif" font-size="8.5">REST + WebSocket</text>
+                    <line x1="220" y1="66" x2="275" y2="66" stroke="#a78bfa" stroke-width="1.5" stroke-opacity="0.7" marker-end="url(#arrow-purple)"/>
+                    <line x1="510" y1="66" x2="575" y2="66" stroke="#fb7185" stroke-width="1.2" stroke-opacity="0.55" stroke-dasharray="5 4" marker-end="url(#arrow-rose)"/>
+                    <rect x="200" y="175" width="130" height="56" rx="10" fill="#16161a" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+                    <text x="265" y="199" text-anchor="middle" fill="#fafafa" font-family="Inter, sans-serif" font-size="10.5" font-weight="500">Service A</text>
+                    <text x="265" y="218" text-anchor="middle" fill="#2dd4bf" font-family="JetBrains Mono, monospace" font-size="10" font-weight="500">:3000</text>
+                    <rect x="365" y="175" width="130" height="56" rx="10" fill="#16161a" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+                    <text x="430" y="199" text-anchor="middle" fill="#fafafa" font-family="Inter, sans-serif" font-size="10.5" font-weight="500">Service B</text>
+                    <text x="430" y="218" text-anchor="middle" fill="#2dd4bf" font-family="JetBrains Mono, monospace" font-size="10" font-weight="500">:8080</text>
+                    <rect x="530" y="175" width="130" height="56" rx="10" fill="#16161a" stroke="rgba(255,255,255,0.1)" stroke-width="1" stroke-dasharray="4 3"/>
+                    <text x="595" y="199" text-anchor="middle" fill="#71717a" font-family="Inter, sans-serif" font-size="10.5" font-weight="500">Service N</text>
+                    <text x="595" y="218" text-anchor="middle" fill="#52525b" font-family="JetBrains Mono, monospace" font-size="10">:XXXX</text>
+                    <line x1="350" y1="112" x2="270" y2="170" stroke="#2dd4bf" stroke-width="1.2" stroke-opacity="0.6" marker-end="url(#arrow-teal)"/>
+                    <line x1="395" y1="112" x2="425" y2="170" stroke="#2dd4bf" stroke-width="1.2" stroke-opacity="0.6" marker-end="url(#arrow-teal)"/>
+                    <line x1="440" y1="112" x2="585" y2="170" stroke="#2dd4bf" stroke-width="1" stroke-opacity="0.35" stroke-dasharray="4 3" marker-end="url(#arrow-teal)"/>
+                    <line x1="60" y1="270" x2="700" y2="270" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+                    <text x="380" y="290" text-anchor="middle" fill="#52525b" font-family="Inter, sans-serif" font-size="8" font-weight="600" letter-spacing="0.1em">INTEGRATIONS</text>
+                    <rect x="80" y="305" width="170" height="52" rx="10" fill="#16161a" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+                    <text x="165" y="327" text-anchor="middle" fill="#a78bfa" font-family="Inter, sans-serif" font-size="10" font-weight="600">Config Manager</text>
+                    <text x="165" y="343" text-anchor="middle" fill="#52525b" font-family="Inter, sans-serif" font-size="8.5">JSON  &#x2022;  Hot Reload</text>
+                    <rect x="280" y="305" width="170" height="52" rx="10" fill="#16161a" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+                    <text x="365" y="327" text-anchor="middle" fill="#2dd4bf" font-family="Inter, sans-serif" font-size="10" font-weight="600">ACME Client</text>
+                    <text x="365" y="343" text-anchor="middle" fill="#52525b" font-family="Inter, sans-serif" font-size="8.5">Let's Encrypt  &#x2022;  DNS-01</text>
+                    <rect x="480" y="305" width="170" height="52" rx="10" fill="#16161a" stroke="rgba(255,255,255,0.12)" stroke-width="1"/>
+                    <text x="565" y="327" text-anchor="middle" fill="#fb7185" font-family="Inter, sans-serif" font-size="10" font-weight="600">GoDaddy DNS</text>
+                    <text x="565" y="343" text-anchor="middle" fill="#52525b" font-family="Inter, sans-serif" font-size="8.5">API Integration</text>
+                    <line x1="165" y1="270" x2="165" y2="300" stroke="#a78bfa" stroke-width="1" stroke-opacity="0.4" stroke-dasharray="3 3"/>
+                    <line x1="365" y1="270" x2="365" y2="300" stroke="#2dd4bf" stroke-width="1" stroke-opacity="0.4" stroke-dasharray="3 3"/>
+                    <line x1="565" y1="270" x2="565" y2="300" stroke="#fb7185" stroke-width="1" stroke-opacity="0.4" stroke-dasharray="3 3"/>
+                </svg>
+            </div>
+        </section>
+    </div>
+
+    <!-- ========================
+         PRODUCT SHOWCASE — WIDE
+         ======================== -->
+    <section class="showcase-section">
+        <div class="container">
+            <div class="section-header reveal">
+                <h2>Built-in Admin UI</h2>
+                <p>Manage your entire proxy infrastructure from a single dashboard.</p>
+            </div>
+        </div>
+
+        <!-- Block 1: Dashboard -->
+        <div class="container-wide">
+            <div class="showcase-block">
+                <div class="showcase-meta reveal">
+                    <div class="showcase-lead">
+                        <span class="label label-teal">
+                            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" color="#2dd4bf"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                            Real-time Overview
+                        </span>
+                        <h3>Everything at a glance</h3>
+                        <p>Stats, route table, and TLS status updated in real time via WebSocket. See active routes, certificate status, and connection health without refreshing.</p>
+                    </div>
+                    <div class="showcase-aside">
+                        <ul class="detail-list">
+                            <li>
+                                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#2dd4bf" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                                Live route count and TLS status cards
+                            </li>
+                            <li>
+                                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#2dd4bf" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                                Route overview table with domain mapping
+                            </li>
+                            <li>
+                                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#2dd4bf" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                                GoDaddy DNS connection indicator
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="showcase-frame reveal reveal-delay-1">
+                    <div class="glow-orb glow-teal" style="width: 400px; height: 300px; top: -60px; right: 10%;"></div>
+                    <div class="dot-grid" style="top: -20px; right: 40px;"></div>
+                    <div class="screenshot-wrap tilt-right">
+                        <div class="window-chrome">
+                            <span class="window-dot red"></span>
+                            <span class="window-dot yellow"></span>
+                            <span class="window-dot green"></span>
+                            <span class="window-url">127.0.0.1:9090</span>
+                        </div>
+                        <img src="screenshots/dashboard.png" alt="Dashboard showing stat cards for active routes, TLS status, and route overview table" loading="lazy">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Block 2: Routes -->
+            <div class="showcase-block">
+                <div class="showcase-meta align-right reveal">
+                    <div class="showcase-lead">
+                        <span class="label label-purple">
+                            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" color="#a78bfa"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+                            Route Management
+                        </span>
+                        <h3>Domain mapping made simple</h3>
+                        <p>Visual route cards with per-route TLS status, auto-cert badges, and quick actions. Add, edit, or delete routes without touching config files.</p>
+                    </div>
+                    <div class="showcase-aside">
+                        <ul class="detail-list">
+                            <li>
+                                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#a78bfa" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                                Card-based route display with status badges
+                            </li>
+                            <li>
+                                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#a78bfa" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                                One-click TLS and auto-cert toggles
+                            </li>
+                            <li>
+                                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#a78bfa" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                                Inline edit and delete actions
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="showcase-frame reveal reveal-delay-1">
+                    <div class="glow-orb glow-purple" style="width: 350px; height: 280px; top: -50px; left: 10%;"></div>
+                    <div class="dot-grid" style="bottom: -20px; left: 30px;"></div>
+                    <div class="screenshot-wrap tilt-left">
+                        <div class="window-chrome">
+                            <span class="window-dot red"></span>
+                            <span class="window-dot yellow"></span>
+                            <span class="window-dot green"></span>
+                            <span class="window-url">127.0.0.1:9090/routes</span>
+                        </div>
+                        <img src="screenshots/routes.png" alt="Route cards showing domain, target, TLS and auto-cert badges" loading="lazy">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Block 3: Events — stacked composition -->
+            <div class="showcase-stack">
+                <div class="showcase-lead reveal">
+                    <span class="label label-rose">
+                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" color="#fb7185"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                        Live Events
+                    </span>
+                    <h3>Real-time activity stream</h3>
+                    <p>WebSocket-powered event log shows route additions, certificate issuance, DNS changes, and config updates as they happen. Every action is timestamped and color-coded.</p>
+                </div>
+                <div class="stack-container reveal reveal-delay-1">
+                    <div class="glow-orb glow-rose" style="width: 500px; height: 300px; top: 50%; left: 50%; transform: translate(-50%, -50%);"></div>
+                    <div class="stack-back">
+                        <div class="screenshot-wrap">
+                            <div class="window-chrome">
+                                <span class="window-dot red"></span>
+                                <span class="window-dot yellow"></span>
+                                <span class="window-dot green"></span>
+                                <span class="window-url">127.0.0.1:9090</span>
+                            </div>
+                            <img src="screenshots/dashboard.png" alt="Dashboard overview" loading="lazy">
+                        </div>
+                    </div>
+                    <div class="stack-front">
+                        <div class="screenshot-wrap">
+                            <div class="window-chrome">
+                                <span class="window-dot red"></span>
+                                <span class="window-dot yellow"></span>
+                                <span class="window-dot green"></span>
+                                <span class="window-url">127.0.0.1:9090/events</span>
+                            </div>
+                            <img src="screenshots/events.png" alt="Live event log showing route additions, certificate issuance and DNS changes" loading="lazy">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="container">
+        <section>
+            <div class="section-header reveal">
+                <h2>Quick Start</h2>
+                <p>Get up and running in under a minute.</p>
+            </div>
+            <div class="code-block reveal"><pre><code><span class="cmd">git clone</span> <span class="path">https://github.com/gcis/proxygate.git</span>
+<span class="cmd">cd</span> <span class="arg">proxygate</span>
+<span class="cmd">make</span> <span class="arg">build</span>
+<span class="cmd">./bin/proxygate</span>
+
+<span class="comment"># Admin UI at http://127.0.0.1:9090</span>
+
+<span class="comment"># With network whitelist for admin UI:</span>
+<span class="cmd">./bin/proxygate</span> <span class="arg">--allow-network</span> <span class="path">192.168.1.0/24</span> <span class="arg">--allow-network</span> <span class="path">10.0.0.0/8</span></code></pre></div>
+        </section>
+
+        <section style="text-align:center" class="reveal">
+            <div class="section-header" style="display:flex;flex-direction:column;align-items:center">
+                <h2>API Reference</h2>
+                <p>Full REST API with 15+ endpoints for routes, certificates, DNS, and real-time events.</p>
+            </div>
+            <a href="api.html" class="cta cta-secondary">View API Documentation &rarr;</a>
+        </section>
+
+        <footer>
+            <p>MIT License &mdash; <a href="https://github.com/gcis/proxygate">GitHub</a></p>
+        </footer>
+    </div>
+
+    <script>
+        // Scroll-triggered reveal animations
+        const revealObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, {
+            threshold: 0.12,
+            rootMargin: '0px 0px -40px 0px'
+        });
+
+        document.querySelectorAll('.reveal').forEach(el => {
+            revealObserver.observe(el);
+        });
+
+        // Subtle parallax on screenshot glow orbs
+        const frameOrbs = document.querySelectorAll('.showcase-frame .glow-orb');
+        document.addEventListener('mousemove', (e) => {
+            const mx = (e.clientX / window.innerWidth - 0.5) * 2;
+            const my = (e.clientY / window.innerHeight - 0.5) * 2;
+            frameOrbs.forEach(orb => {
+                orb.style.transform = `translate(${mx * 18}px, ${my * 18}px)`;
+            });
+        });
+    </script>
+</body>
+</html>

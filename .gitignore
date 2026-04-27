@@ -1,0 +1,35 @@
+# Binaries
+proxygate
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Build
+/bin/
+/dist/
+
+# Data
+/data/*.json
+/certs/*.pem
+/certs/*.key
+!/data/.gitkeep
+!/certs/.gitkeep
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Runtime
+*.pid
+
+# Environment
+.env
+*.env.local

@@ -40,6 +40,16 @@ type Client struct {
 	directory  string
 	logger     *slog.Logger
 	challenges map[string]*ChallengeStatus
+	// orders holds the ACME order created by RequestCertificate so that
+	// CompleteChallengeAndFetchCert validates the SAME authorization whose
+	// token was published in DNS (a fresh order gets a fresh token, which
+	// made every completion fail with "Incorrect TXT record").
+	orders map[string]pendingOrder
+}
+
+type pendingOrder struct {
+	orderURI string
+	authzURL string
 }
 
 func NewClient(email, certDir, directory string, logger *slog.Logger) (*Client, error) {
@@ -65,6 +75,7 @@ func NewClient(email, certDir, directory string, logger *slog.Logger) (*Client, 
 		directory:  directory,
 		logger:     logger,
 		challenges: make(map[string]*ChallengeStatus),
+		orders:     make(map[string]pendingOrder),
 	}, nil
 }
 
@@ -169,6 +180,10 @@ func (c *Client) RequestCertificate(ctx context.Context, domain string) (*Challe
 		RecordVal:  recordValue,
 	}
 	c.challenges[domain] = status
+	if c.orders == nil {
+		c.orders = make(map[string]pendingOrder)
+	}
+	c.orders[domain] = pendingOrder{orderURI: order.URI, authzURL: order.AuthzURLs[0]}
 
 	c.logger.Info("DNS-01 challenge ready",
 		"domain", domain,
@@ -192,15 +207,20 @@ func (c *Client) CompleteChallengeAndFetchCert(ctx context.Context, domain strin
 		return "", "", fmt.Errorf("no pending challenge for %s", domain)
 	}
 
-	// Re-authorize to get fresh state
-	order, err := c.acmeClient.AuthorizeOrder(ctx, acme.DomainIDs(domain))
+	// Reuse the order from RequestCertificate: its authorization carries the
+	// token whose digest was published as the TXT record.
+	pending, ok := c.orders[domain]
+	if !ok {
+		return "", "", fmt.Errorf("no pending order for %s", domain)
+	}
+	order, err := c.acmeClient.GetOrder(ctx, pending.orderURI)
 	if err != nil {
 		status.Status = "invalid"
 		status.Error = err.Error()
-		return "", "", fmt.Errorf("re-authorizing order: %w", err)
+		return "", "", fmt.Errorf("fetching order: %w", err)
 	}
 
-	authz, err := c.acmeClient.GetAuthorization(ctx, order.AuthzURLs[0])
+	authz, err := c.acmeClient.GetAuthorization(ctx, pending.authzURL)
 	if err != nil {
 		status.Status = "invalid"
 		status.Error = err.Error()
@@ -228,7 +248,7 @@ func (c *Client) CompleteChallengeAndFetchCert(ctx context.Context, domain strin
 	}
 
 	// Wait for authorization
-	if _, err := c.acmeClient.WaitAuthorization(ctx, order.AuthzURLs[0]); err != nil {
+	if _, err := c.acmeClient.WaitAuthorization(ctx, pending.authzURL); err != nil {
 		status.Status = "invalid"
 		status.Error = err.Error()
 		return "", "", fmt.Errorf("waiting for authorization: %w", err)

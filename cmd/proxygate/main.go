@@ -33,13 +33,33 @@ func (a *configProviderAdapter) Get() config.Config {
 // acmeRequesterAdapter adapts *acme.Client to certmanager.CertRequester.
 // It calls RequestCertificate first (to initiate the DNS-01 challenge), then
 // CompleteChallengeAndFetchCert (which waits for propagation and retrieves the cert).
+// Between the two it publishes the TXT record via the DNS provider — without
+// that step Let's Encrypt never sees the challenge and renewal always fails.
 type acmeRequesterAdapter struct {
 	client *acme.Client
+	dns    acme.DNSProvider
+	// propagationWait is how long to wait after creating the TXT record.
+	propagationWait time.Duration
 }
 
 func (a *acmeRequesterAdapter) RenewForDomain(ctx context.Context, domain string) (certPath, keyPath string, err error) {
-	if _, err = a.client.RequestCertificate(ctx, domain); err != nil {
+	if err = a.client.Register(ctx); err != nil {
+		return "", "", fmt.Errorf("acme register: %w", err)
+	}
+	status, err := a.client.RequestCertificate(ctx, domain)
+	if err != nil {
 		return "", "", fmt.Errorf("acme request: %w", err)
+	}
+	if a.dns == nil {
+		return "", "", fmt.Errorf("no DNS provider configured for DNS-01 challenge")
+	}
+	if err = a.dns.CreateTXTRecord(ctx, domain, status.RecordName, status.RecordVal); err != nil {
+		return "", "", fmt.Errorf("creating TXT record: %w", err)
+	}
+	select {
+	case <-time.After(a.propagationWait):
+	case <-ctx.Done():
+		return "", "", ctx.Err()
 	}
 	return a.client.CompleteChallengeAndFetchCert(ctx, domain)
 }
@@ -135,7 +155,7 @@ func main() {
 	// Init certificate manager (automatic renewal + hot reload)
 	certMgr := certmanager.NewManager(
 		engine,
-		&acmeRequesterAdapter{client: acmeClient},
+		&acmeRequesterAdapter{client: acmeClient, dns: godaddyClient, propagationWait: 30 * time.Second},
 		godaddyClient,
 		&configProviderAdapter{mgr: cfgMgr},
 		logger,

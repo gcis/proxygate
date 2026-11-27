@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -78,7 +79,21 @@ func SecurityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("X-XSS-Protection", "1; mode=block")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		// The UI ships no inline scripts or styles and no third-party assets,
+		// so the policy can stay strict.
+		w.Header().Set("Content-Security-Policy", strings.Join([]string{
+			"default-src 'self'",
+			"script-src 'self'",
+			"style-src 'self'",
+			"img-src 'self' data:",
+			"font-src 'self'",
+			"connect-src 'self' ws: wss:",
+			"object-src 'none'",
+			"base-uri 'self'",
+			"form-action 'self'",
+			"frame-ancestors 'none'",
+		}, "; "))
 		next.ServeHTTP(w, r)
 	})
 }
@@ -161,6 +176,7 @@ func RateLimit(rl *RateLimiter) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			host, _, _ := net.SplitHostPort(r.RemoteAddr)
 			if !rl.Allow(host) {
+				w.Header().Set("Retry-After", "60")
 				http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
 				return
 			}

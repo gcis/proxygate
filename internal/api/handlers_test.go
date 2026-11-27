@@ -14,6 +14,7 @@ import (
 
 	"github.com/gcis/proxygate/internal/acme"
 	"github.com/gcis/proxygate/internal/api"
+	"github.com/gcis/proxygate/internal/auth"
 	"github.com/gcis/proxygate/internal/config"
 	"github.com/gcis/proxygate/internal/godaddy"
 	"github.com/gcis/proxygate/internal/proxy"
@@ -49,7 +50,7 @@ func serverSetup(t *testing.T, gdHandler http.Handler) (http.Handler, *config.Ma
 	gdClient := godaddy.NewClient("key", "secret", gdSrv.URL, hSilentLogger())
 
 	srv := api.NewServer(cfgMgr, engine, acmeClient, gdClient, nil, hSilentLogger())
-	return srv, cfgMgr
+	return withAPIToken(t, dir, srv), cfgMgr
 }
 
 // serverSetupUnconfiguredGodaddy creates a Server with an unconfigured GoDaddy client.
@@ -67,7 +68,24 @@ func serverSetupUnconfiguredGodaddy(t *testing.T) (http.Handler, *config.Manager
 	engine := proxy.NewEngine(cfgMgr, hSilentLogger())
 	gdClient := godaddy.NewClient("", "", "https://api.godaddy.com", hSilentLogger()) // not configured
 	srv := api.NewServer(cfgMgr, engine, acmeClient, gdClient, nil, hSilentLogger())
-	return srv, cfgMgr
+	return withAPIToken(t, dir, srv), cfgMgr
+}
+
+// withAPIToken wraps srv so every request carries a valid API token, as the
+// admin API requires authentication. Tests that need an anonymous caller
+// set their own Authorization header or use the raw server.
+func withAPIToken(t *testing.T, dir string, srv http.Handler) http.Handler {
+	t.Helper()
+	token, err := auth.NewStore(dir).CreateToken("tests")
+	if err != nil {
+		t.Fatalf("token: %v", err)
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") == "" {
+			r.Header.Set("Authorization", "Bearer "+token)
+		}
+		srv.ServeHTTP(w, r)
+	})
 }
 
 // hSilentLogger returns a logger that discards output.
@@ -595,11 +613,22 @@ func TestServeHTTP_OPTIONS_Returns200(t *testing.T) {
 	}
 }
 
-func TestServeHTTP_SetsCORSHeaders(t *testing.T) {
+func TestServeHTTP_CORSReflectsOnlySameOrigin(t *testing.T) {
 	srv, _ := serverSetup(t, nil)
-	w := doReq(srv, http.MethodGet, "/healthz", nil)
-	origin := w.Header().Get("Access-Control-Allow-Origin")
-	if origin == "" {
-		t.Error("Access-Control-Allow-Origin header should be set")
+
+	same := httptest.NewRequest(http.MethodGet, "http://admin.local:9090/healthz", nil)
+	same.Header.Set("Origin", "http://admin.local:9090")
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, same)
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "http://admin.local:9090" {
+		t.Errorf("same-origin: want origin reflected, got %q", got)
+	}
+
+	cross := httptest.NewRequest(http.MethodGet, "http://admin.local:9090/healthz", nil)
+	cross.Header.Set("Origin", "https://evil.example")
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, cross)
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("cross-origin: must not set ACAO, got %q", got)
 	}
 }

@@ -52,7 +52,17 @@ sudo systemctl enable --now proxygate
 # 6. Check status
 sudo systemctl status proxygate
 journalctl -u proxygate -f
+
+# 7. First sign-in: the admin UI is locked until you set a password with the
+#    one-time code ProxyGate wrote on first start (it is never logged).
+sudo cat /opt/proxygate/data/setup-code
+ssh -L 9090:127.0.0.1:9090 <server>   # then open http://127.0.0.1:9090
 ```
+
+Lost the admin password later? `sudo -u proxygate /opt/proxygate/proxygate passwd --config /opt/proxygate/data/proxygate.json`
+sets a new one and signs out every session. See the
+[security guide](https://gcis.github.io/proxygate/security.html) for HTTPS on
+the admin port, API tokens and the other hardening options.
 
 ### Config snippet (`/opt/proxygate/data/proxygate.json`)
 
@@ -164,7 +174,7 @@ capability at container start:
 docker run -d \
   --name proxygate \
   --cap-add=NET_BIND_SERVICE \
-  -p 80:80 -p 443:443 -p 9090:9090 \
+  -p 80:80 -p 443:443 -p 127.0.0.1:9090:9090 \
   -v /opt/proxygate/data:/data \
   -v /opt/proxygate/certs:/certs \
   ghcr.io/gcis/proxygate:latest \
@@ -182,13 +192,19 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./data:/data
       - ./certs:/certs
     command: ["--config", "/data/proxygate.json"]
     restart: unless-stopped
 ```
+
+Inside a container the admin listener must bind all interfaces to be reachable
+through the published port: set `"admin_host": "0.0.0.0"` and add the Docker
+bridge range (for example `172.16.0.0/12`) to `allowed_networks`. Publishing it
+on `127.0.0.1` as above keeps it off the network. The setup code for the first
+sign-in is in `data/setup-code` on the mounted volume.
 
 ### Kubernetes
 
@@ -231,6 +247,37 @@ cat /proc/$(pgrep proxygate)/status | grep Cap
 
 ---
 
+## Upgrading to the version with admin login
+
+The first start of this version changes three things:
+
+1. **The admin UI is locked** until a password is set. Read the one-time code
+   from `data/setup-code` and enter it in the admin UI, or run
+   `proxygate passwd --config <path>` on the machine. Routes keep serving
+   throughout.
+2. **Scripts that call the API get `401`.** Create a token for each with
+   `proxygate token create <name> --config <path>` and send it as
+   `Authorization: Bearer <token>`. `/healthz` stays public, so liveness probes
+   need no change.
+3. **Stored credentials are encrypted.** Without `PROXYGATE_CONFIG_KEY`, the
+   GoDaddy key, secret and ACME email are encrypted with a new
+   `data/secret.key` (mode 0600). Back that file up with the config.
+
+### Rolling back
+
+Earlier versions refuse to start on an encrypted config unless they are given
+the key. Either restore the config backup taken before the upgrade, or start
+the older binary with the generated key:
+
+```bash
+PROXYGATE_CONFIG_KEY=$(cat /opt/proxygate/data/secret.key) /opt/proxygate/proxygate --config /opt/proxygate/data/proxygate.json
+```
+
+Older versions ignore the new `security` section and the auth files, so they
+can stay in place.
+
+---
+
 ## Production readiness checklist
 
 | Feature | Status | Notes |
@@ -244,6 +291,9 @@ cat /proc/$(pgrep proxygate)/status | grep Cap
 | systemd unit with AmbientCapabilities | ✅ | `examples/systemd/proxygate.service` |
 | Admin UI localhost-only by default | ✅ | `admin_host: "127.0.0.1"` |
 | No runtime `setuid`/root assumption | ✅ | Capabilities only |
-| TLS authentication on admin UI | ❌ | TODO — currently relies on network allowlist |
-| Config file encryption / secrets manager | ✅ | AES-256-GCM via `PROXYGATE_CONFIG_KEY` env var — see README |
+| Admin UI login | ✅ | Password set on first start with a one-time code; `proxygate passwd` to recover |
+| API tokens for scripts | ✅ | `proxygate token create`; only hashes are stored |
+| HTTPS on the admin port | ✅ | Opt-in: `security.admin_tls` (own certificate or generated self-signed) |
+| Stored credentials encrypted | ✅ | AES-256-GCM by default; key from `PROXYGATE_CONFIG_KEY` or `data/secret.key` |
+| Two-factor login, audit log | ❌ | On the roadmap in the security guide |
 | Automatic certificate renewal | ✅ | Daily check; renews 30 days before expiry with hot-reload |

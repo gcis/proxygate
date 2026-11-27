@@ -11,6 +11,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"time"
@@ -21,38 +22,48 @@ import (
 )
 
 func main() {
-	configPath := flag.String("config", "./data/proxygate.json", "Path to config file")
-	wait := flag.Duration("propagation-wait", 30*time.Second, "Wait after creating the TXT record")
-	flag.Parse()
-	if flag.NArg() == 0 {
-		fmt.Fprintln(os.Stderr, "usage: renewcert [-config path] domain [domain...]")
-		os.Exit(2)
+	os.Exit(run(context.Background(), os.Args[1:], os.Stdout, os.Stderr))
+}
+
+// run renews each domain named in args and returns the exit code: 0 if all
+// succeeded, 1 on any failure, 2 on usage errors.
+func run(parent context.Context, args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("renewcert", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	configPath := fs.String("config", "./data/proxygate.json", "Path to config file")
+	wait := fs.Duration("propagation-wait", 30*time.Second, "Wait after creating the TXT record")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if fs.NArg() == 0 {
+		fmt.Fprintln(stderr, "usage: renewcert [-config path] domain [domain...]")
+		return 2
 	}
 
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	logger := slog.New(slog.NewTextHandler(stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	cfgMgr, err := config.NewManager(*configPath)
 	if err != nil {
 		logger.Error("failed to load config", "error", err)
-		os.Exit(1)
+		return 1
 	}
 	cfg := cfgMgr.Get()
 
 	acmeClient, err := acme.NewClient(cfg.ACME.Email, cfg.ACME.CertDir, cfg.ACME.Directory, logger)
 	if err != nil {
 		logger.Error("failed to init ACME client", "error", err)
-		os.Exit(1)
+		return 1
 	}
 	dns := godaddy.NewClient(cfg.GoDaddy.APIKey, cfg.GoDaddy.APISecret, cfg.GoDaddy.BaseURL, logger)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(parent, 10*time.Minute)
 	defer cancel()
 	if err := acmeClient.Register(ctx); err != nil {
 		logger.Error("acme register failed", "error", err)
-		os.Exit(1)
+		return 1
 	}
 
 	failed := 0
-	for _, domain := range flag.Args() {
+	for _, domain := range fs.Args() {
 		if err := renew(ctx, acmeClient, dns, domain, *wait); err != nil {
 			logger.Error("renewal failed", "domain", domain, "error", err)
 			failed++
@@ -61,8 +72,9 @@ func main() {
 		logger.Info("renewal succeeded", "domain", domain)
 	}
 	if failed > 0 {
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
 
 func renew(ctx context.Context, c *acme.Client, dns acme.DNSProvider, domain string, wait time.Duration) error {

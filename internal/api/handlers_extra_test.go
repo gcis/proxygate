@@ -35,7 +35,7 @@ func serverSetupFakeACME(t *testing.T) (http.Handler, *config.Manager) {
 	engine := proxy.NewEngine(cfgMgr, hSilentLogger())
 	gdClient := godaddy.NewClient("", "", "https://api.godaddy.com", hSilentLogger())
 	srv := api.NewServer(cfgMgr, engine, acmeClient, gdClient, nil, hSilentLogger())
-	return srv, cfgMgr
+	return withAPIToken(t, dir, srv), cfgMgr
 }
 
 // ─── RequestLogger ────────────────────────────────────────────────────────────

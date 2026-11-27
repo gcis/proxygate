@@ -9,7 +9,9 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -28,6 +30,7 @@ type Domain struct {
 }
 
 type Client struct {
+	mu        sync.RWMutex
 	apiKey    string
 	apiSecret string
 	baseURL   string
@@ -51,12 +54,35 @@ func NewClient(apiKey, apiSecret, baseURL string, logger *slog.Logger) *Client {
 }
 
 func (c *Client) IsConfigured() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.apiKey != "" && c.apiSecret != ""
 }
 
 func (c *Client) UpdateCredentials(apiKey, apiSecret string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.apiKey = apiKey
 	c.apiSecret = apiSecret
+}
+
+// UpdateConfig replaces credentials and, when baseURL is non-empty, the API
+// endpoint. Safe to call while requests are in flight.
+func (c *Client) UpdateConfig(apiKey, apiSecret, baseURL string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.apiKey = apiKey
+	c.apiSecret = apiSecret
+	if baseURL != "" {
+		c.baseURL = strings.TrimRight(baseURL, "/")
+	}
+}
+
+// BaseURL returns the API endpoint currently in use.
+func (c *Client) BaseURL() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.baseURL
 }
 
 func (c *Client) doRequest(ctx context.Context, method, path string, body interface{}) ([]byte, error) {
@@ -69,12 +95,16 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 		reqBody = bytes.NewReader(data)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, reqBody)
+	c.mu.RLock()
+	baseURL, apiKey, apiSecret := c.baseURL, c.apiKey, c.apiSecret
+	c.mu.RUnlock()
+
+	req, err := http.NewRequestWithContext(ctx, method, baseURL+path, reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("sso-key %s:%s", c.apiKey, c.apiSecret))
+	req.Header.Set("Authorization", fmt.Sprintf("sso-key %s:%s", apiKey, apiSecret))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
@@ -108,6 +138,32 @@ func (c *Client) ListDomains(ctx context.Context) ([]Domain, error) {
 	}
 
 	return domains, nil
+}
+
+// ListDomainsSorted returns the account's domains sorted by name. Unless
+// includeInactive is set, only ACTIVE domains are returned — expired,
+// cancelled, transferred-out and pending domains cannot have their DNS
+// managed, so listing them by default is just noise.
+func (c *Client) ListDomainsSorted(ctx context.Context, includeInactive bool) ([]Domain, error) {
+	domains, err := c.ListDomains(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Domain, 0, len(domains))
+	for _, d := range domains {
+		if includeInactive || IsActive(d) {
+			out = append(out, d)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return strings.ToLower(out[i].Domain) < strings.ToLower(out[j].Domain)
+	})
+	return out, nil
+}
+
+// IsActive reports whether GoDaddy lists the domain with status ACTIVE.
+func IsActive(d Domain) bool {
+	return strings.EqualFold(strings.TrimSpace(d.Status), "ACTIVE")
 }
 
 func (c *Client) GetRecords(ctx context.Context, domain string) ([]DNSRecord, error) {

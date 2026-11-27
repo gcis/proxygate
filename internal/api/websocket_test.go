@@ -3,9 +3,11 @@ package api_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gcis/proxygate/internal/api"
+	"github.com/gorilla/websocket"
 )
 
 func TestNewWSHub_NotNil(t *testing.T) {
@@ -37,4 +39,24 @@ func TestHandleWS_WithoutUpgradeHeaders_Returns400(t *testing.T) {
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("want 400 for non-websocket upgrade, got %d", w.Code)
 	}
+}
+
+func TestHandleWS_RejectsCrossOriginUpgrade(t *testing.T) {
+	hub := api.NewWSHub(hSilentLogger())
+	srv := httptest.NewServer(http.HandlerFunc(hub.HandleWS))
+	defer srv.Close()
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+
+	hdr := http.Header{"Origin": []string{"https://evil.example"}}
+	if conn, _, err := websocket.DefaultDialer.Dial(wsURL, hdr); err == nil {
+		conn.Close()
+		t.Fatal("cross-origin WebSocket upgrade must be rejected")
+	}
+
+	hdr = http.Header{"Origin": []string{srv.URL}}
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, hdr)
+	if err != nil {
+		t.Fatalf("same-origin upgrade should succeed: %v", err)
+	}
+	conn.Close()
 }

@@ -28,16 +28,33 @@ func KeyFromEnv() ([]byte, error) {
 		return nil, fmt.Errorf("%s is not set; generate one with: openssl rand -hex 32", keyEnvVar)
 	}
 
-	key, err := hex.DecodeString(val)
+	key, err := ParseKey(val)
 	if err != nil {
-		return nil, fmt.Errorf("decoding %s: %w (must be hex-encoded)", keyEnvVar, err)
+		return nil, fmt.Errorf("%s: %w", keyEnvVar, err)
 	}
+	return key, nil
+}
 
+// ParseKey decodes a hex-encoded 32-byte key, as used by PROXYGATE_CONFIG_KEY
+// and the generated secret.key file.
+func ParseKey(hexKey string) ([]byte, error) {
+	key, err := hex.DecodeString(hexKey)
+	if err != nil {
+		return nil, fmt.Errorf("decoding key: %w (must be hex-encoded)", err)
+	}
 	if len(key) != 32 {
-		return nil, fmt.Errorf("%s must decode to exactly 32 bytes (got %d); "+
-			"generate a valid key with: openssl rand -hex 32", keyEnvVar, len(key))
+		return nil, fmt.Errorf("key must decode to exactly 32 bytes (got %d); "+
+			"generate a valid key with: openssl rand -hex 32", len(key))
 	}
+	return key, nil
+}
 
+// NewKey returns a fresh random 32-byte key.
+func NewKey() ([]byte, error) {
+	key := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, key); err != nil {
+		return nil, fmt.Errorf("generating key: %w", err)
+	}
 	return key, nil
 }
 

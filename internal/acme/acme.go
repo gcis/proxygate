@@ -111,12 +111,40 @@ func loadOrCreateAccountKey(path string) (crypto.Signer, error) {
 	return key, nil
 }
 
+// UpdateConfig applies a new contact email and directory without a restart.
+// Switching directory (e.g. staging -> production) discards pending
+// challenges, since their orders belong to the old ACME server.
+func (c *Client) UpdateConfig(email, directory string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.email = email
+	if directory != "" && directory != c.directory {
+		c.logger.Info("ACME directory changed", "from", c.directory, "to", directory)
+		c.directory = directory
+		c.acmeClient = &acme.Client{Key: c.accountKey, DirectoryURL: directory}
+		c.challenges = make(map[string]*ChallengeStatus)
+		c.orders = make(map[string]pendingOrder)
+	}
+}
+
+// Directory returns the ACME directory URL currently in use.
+func (c *Client) Directory() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.directory
+}
+
 func (c *Client) Register(ctx context.Context) error {
-	acct := &acme.Account{
-		Contact: []string{"mailto:" + c.email},
+	c.mu.Lock()
+	client, email := c.acmeClient, c.email
+	c.mu.Unlock()
+
+	acct := &acme.Account{}
+	if email != "" {
+		acct.Contact = []string{"mailto:" + email}
 	}
 
-	_, err := c.acmeClient.Register(ctx, acct, func(tosURL string) bool {
+	_, err := client.Register(ctx, acct, func(tosURL string) bool {
 		c.logger.Info("accepting ACME ToS", "url", tosURL)
 		return true
 	})
@@ -124,7 +152,7 @@ func (c *Client) Register(ctx context.Context) error {
 		return fmt.Errorf("registering account: %w", err)
 	}
 
-	c.logger.Info("ACME account registered", "email", c.email)
+	c.logger.Info("ACME account registered", "email", email)
 	return nil
 }
 

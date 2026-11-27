@@ -16,8 +16,11 @@ type WSHub struct {
 }
 
 var upgrader = websocket.Upgrader{
+	// Reject cross-site WebSocket hijacking: a page on another origin open in
+	// the operator's browser must not be able to subscribe to config events.
+	// Non-browser clients (no Origin header) are still allowed.
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Admin UI is local-only
+		return sameOrigin(r)
 	},
 }
 

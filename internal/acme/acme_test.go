@@ -194,3 +194,30 @@ func TestCompleteChallengeAndFetchCert_NoPendingChallenge(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
+
+func TestUpdateConfig_SwitchesDirectoryAndClearsChallenges(t *testing.T) {
+	c, err := NewClient("a@example.com", t.TempDir(), "https://acme-staging-v02.api.letsencrypt.org/directory", silentLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.challenges["x.example.com"] = &ChallengeStatus{Domain: "x.example.com", Status: "pending"}
+
+	c.UpdateConfig("b@example.com", "https://acme-staging-v02.api.letsencrypt.org/directory")
+	if len(c.GetAllChallenges()) != 1 {
+		t.Fatal("same directory must keep pending challenges")
+	}
+	if c.email != "b@example.com" {
+		t.Errorf("email not updated: %q", c.email)
+	}
+
+	c.UpdateConfig("b@example.com", "https://acme-v02.api.letsencrypt.org/directory")
+	if c.Directory() != "https://acme-v02.api.letsencrypt.org/directory" {
+		t.Errorf("directory not switched: %q", c.Directory())
+	}
+	if c.acmeClient.DirectoryURL != c.Directory() {
+		t.Error("underlying ACME client must point at the new directory")
+	}
+	if len(c.GetAllChallenges()) != 0 {
+		t.Error("switching directory must drop pending challenges")
+	}
+}

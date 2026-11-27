@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -151,7 +152,7 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	targetURL := &url.URL{
 		Scheme: "http",
-		Host:   fmt.Sprintf("%s:%d", route.TargetHost, route.TargetPort),
+		Host:   net.JoinHostPort(strings.Trim(route.TargetHost, "[]"), strconv.Itoa(route.TargetPort)),
 	}
 
 	proxy := httputil.NewSingleHostReverseProxy(targetURL)

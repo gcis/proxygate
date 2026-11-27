@@ -7,11 +7,13 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"github.com/gcis/proxygate/internal/acme"
 	"github.com/gcis/proxygate/internal/api"
+	"github.com/gcis/proxygate/internal/auth"
 	"github.com/gcis/proxygate/internal/certmanager"
 	"github.com/gcis/proxygate/internal/config"
 	"github.com/gcis/proxygate/internal/godaddy"
@@ -76,12 +78,22 @@ func (m *multiFlag) Set(v string) error {
 }
 
 func main() {
+	if handled, code := runAdminCommand(os.Args[1:]); handled {
+		os.Exit(code)
+	}
+
 	var (
 		configPath      = flag.String("config", "./data/proxygate.json", "Path to config file")
 		showVersion     = flag.Bool("version", false, "Print version and exit")
 		allowedNetworks multiFlag
 	)
 	flag.Var(&allowedNetworks, "allow-network", "Allow admin UI access from this CIDR (can be repeated)")
+	flag.Usage = func() {
+		fmt.Fprintln(flag.CommandLine.Output(), "usage: proxygate [flags]")
+		fmt.Fprintln(flag.CommandLine.Output(), "       proxygate passwd [--config path] [--generate] [--policy strong|basic]")
+		fmt.Fprintln(flag.CommandLine.Output(), "       proxygate token create|list|revoke [name] [--config path]")
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 
 	if *showVersion {
@@ -124,6 +136,28 @@ func main() {
 	}
 
 	cfg := cfgMgr.Get()
+
+	if st := cfgMgr.SecretsStatus(); st.Error != "" {
+		logger.Warn("stored GoDaddy credentials and ACME email could not be decrypted; "+
+			"the proxy keeps running, re-enter them in the admin UI or restore the key and restart",
+			"error", st.Error)
+	}
+
+	// The admin UI stays locked until a password exists. The one-time setup
+	// code is written to a file readable only by this user; never logged.
+	authStore := auth.NewStore(filepath.Dir(*configPath))
+	if required, err := authStore.SetupRequired(); err != nil {
+		logger.Error("reading admin credentials", "error", err)
+		os.Exit(1)
+	} else if required {
+		codePath, err := authStore.EnsureSetupCode()
+		if err != nil {
+			logger.Error("creating setup code", "error", err)
+			os.Exit(1)
+		}
+		logger.Warn("admin UI is locked until first setup: open it and enter the one-time code from the setup file "+
+			"(or run 'proxygate passwd')", "setup_code_file", codePath)
+	}
 
 	// Init ACME client
 	acmeClient, err := acme.NewClient(
@@ -176,8 +210,12 @@ func main() {
 		}
 	}()
 
+	adminScheme := "http"
+	if cfg.Security.AdminTLS.Enabled {
+		adminScheme = "https"
+	}
 	logger.Info("ProxyGate running",
-		"admin_ui", fmt.Sprintf("http://%s", adminAddr),
+		"admin_ui", fmt.Sprintf("%s://%s", adminScheme, adminAddr),
 		"http_proxy", fmt.Sprintf(":%d", cfg.Server.HTTPPort),
 		"https_proxy", fmt.Sprintf(":%d", cfg.Server.HTTPSPort),
 	)

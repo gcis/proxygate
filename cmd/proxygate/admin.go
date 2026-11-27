@@ -1,0 +1,204 @@
+package main
+
+import (
+	"bufio"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"golang.org/x/term"
+
+	"github.com/gcis/proxygate/internal/auth"
+)
+
+// runAdminCommand handles the maintenance subcommands. They work on the
+// files next to the config, so anyone who can act as the service user (or
+// root) can recover access; see docs/security.md.
+func runAdminCommand(args []string) (handled bool, code int) {
+	if len(args) == 0 {
+		return false, 0
+	}
+	switch args[0] {
+	case "passwd":
+		return true, runPasswd(args[1:])
+	case "token":
+		return true, runToken(args[1:])
+	}
+	return false, 0
+}
+
+func authStoreFor(configPath string) (*auth.Store, string, error) {
+	dir := filepath.Dir(configPath)
+	if _, err := os.Stat(dir); err != nil {
+		return nil, "", fmt.Errorf("config directory %s: %w", dir, err)
+	}
+	return auth.NewStore(dir), dir, nil
+}
+
+func runPasswd(args []string) int {
+	fs := flag.NewFlagSet("passwd", flag.ContinueOnError)
+	configPath := fs.String("config", "./data/proxygate.json", "Path to config file")
+	generate := fs.Bool("generate", false, "Generate a random password and print it")
+	policy := fs.String("policy", "", `Password rules: "strong" (12+ characters, no common passwords) or "basic" (8+). Default: keep the current setting`)
+	fs.Usage = func() {
+		fmt.Fprintln(fs.Output(), "usage: proxygate passwd [--config path] [--generate] [--policy strong|basic]")
+		fmt.Fprintln(fs.Output(), "Sets the admin password and signs out every admin session.")
+		fs.PrintDefaults()
+	}
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	var strong *bool
+	switch *policy {
+	case "":
+	case "strong", "basic":
+		v := *policy == "strong"
+		strong = &v
+	default:
+		fmt.Fprintln(os.Stderr, `--policy must be "strong" or "basic"`)
+		return 2
+	}
+
+	store, dir, err := authStoreFor(*configPath)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		return 1
+	}
+
+	var password string
+	if *generate {
+		if password, err = auth.RandomPassword(); err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			return 1
+		}
+	} else if password, err = readNewPassword(); err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		return 1
+	}
+
+	if err := store.SetPassword(password, strong); err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		return 1
+	}
+	matchOwnership(*configPath, filepath.Join(dir, auth.AuthFileName))
+
+	if *generate {
+		fmt.Println(password)
+		fmt.Fprintln(os.Stderr, "Admin password set to the value above. All admin sessions are signed out.")
+	} else {
+		fmt.Println("Admin password updated. All admin sessions are signed out.")
+	}
+	return 0
+}
+
+// readNewPassword prompts twice without echo on a terminal, or reads one
+// line from stdin when piped (for automation).
+func readNewPassword() (string, error) {
+	fd := int(os.Stdin.Fd())
+	if !term.IsTerminal(fd) {
+		line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+		if err != nil && !errors.Is(err, io.EOF) {
+			return "", err
+		}
+		pw := strings.TrimRight(line, "\r\n")
+		if pw == "" {
+			return "", errors.New("no password on stdin")
+		}
+		return pw, nil
+	}
+	fmt.Fprint(os.Stderr, "New admin password: ")
+	first, err := term.ReadPassword(fd)
+	fmt.Fprintln(os.Stderr)
+	if err != nil {
+		return "", err
+	}
+	fmt.Fprint(os.Stderr, "Repeat password: ")
+	second, err := term.ReadPassword(fd)
+	fmt.Fprintln(os.Stderr)
+	if err != nil {
+		return "", err
+	}
+	if string(first) != string(second) {
+		return "", errors.New("passwords do not match")
+	}
+	return string(first), nil
+}
+
+func runToken(args []string) int {
+	usage := func() {
+		fmt.Fprintln(os.Stderr, "usage: proxygate token create|list|revoke [name] [--config path]")
+		fmt.Fprintln(os.Stderr, "API tokens authenticate scripts with: Authorization: Bearer <token>")
+	}
+	if len(args) == 0 {
+		usage()
+		return 2
+	}
+	action := args[0]
+	fs := flag.NewFlagSet("token", flag.ContinueOnError)
+	configPath := fs.String("config", "./data/proxygate.json", "Path to config file")
+	// Allow the name before or after the flags.
+	var name string
+	rest := args[1:]
+	if len(rest) > 0 && !strings.HasPrefix(rest[0], "-") {
+		name, rest = rest[0], rest[1:]
+	}
+	if err := fs.Parse(rest); err != nil {
+		return 2
+	}
+	if name == "" && fs.NArg() > 0 {
+		name = fs.Arg(0)
+	}
+
+	store, dir, err := authStoreFor(*configPath)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		return 1
+	}
+
+	switch action {
+	case "create":
+		if name == "" {
+			usage()
+			return 2
+		}
+		secret, err := store.CreateToken(name)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			return 1
+		}
+		matchOwnership(*configPath, filepath.Join(dir, auth.AuthFileName))
+		fmt.Println(secret)
+		fmt.Fprintf(os.Stderr, "Token %q created. It is shown only once; store it somewhere safe.\n", name)
+	case "list":
+		tokens, err := store.Tokens()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			return 1
+		}
+		if len(tokens) == 0 {
+			fmt.Println("No API tokens.")
+		}
+		for _, t := range tokens {
+			fmt.Printf("%s\tcreated %s\n", t.Name, t.CreatedAt)
+		}
+	case "revoke":
+		if name == "" {
+			usage()
+			return 2
+		}
+		if err := store.RevokeToken(name); err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			return 1
+		}
+		fmt.Printf("Token %q revoked.\n", name)
+	default:
+		usage()
+		return 2
+	}
+	return 0
+}

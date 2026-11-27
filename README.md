@@ -43,7 +43,7 @@ make build
 ./bin/proxygate
 ```
 
-The admin UI will be available at `http://127.0.0.1:9090`.
+The admin UI will be available at `http://127.0.0.1:9090`. On first start it is locked: open it and enter the one-time setup code from `data/setup-code`, then choose a password. If you lose the password, run `./bin/proxygate passwd` on the machine. See [Security](https://gcis.github.io/proxygate/security.html).
 
 ### With Network Whitelist
 
@@ -53,7 +53,9 @@ Restrict admin UI access to specific networks from the command line:
 ./bin/proxygate --allow-network 192.168.1.0/24 --allow-network 10.0.0.0/8
 ```
 
-The flag can be repeated. If omitted, the admin UI defaults to localhost only (`127.0.0.0/8`, `::1/128`). Networks can also be configured in the JSON config or through the Settings page in the UI.
+The flag can be repeated and is saved to the config. If omitted, the admin UI defaults to localhost only (`127.0.0.0/8`, `::1/128`). Networks can also be configured in the JSON config or through the Settings page in the UI.
+
+The admin UI listens on `127.0.0.1` by default, so to reach it from another machine also set `"admin_host": "0.0.0.0"` (or the machine's LAN address) in the config. The admin UI also requires a password; for HTTPS and stricter login rules see the [security guide](https://gcis.github.io/proxygate/security.html#advanced).
 
 ### Using Go directly
 
@@ -184,41 +186,19 @@ With GoDaddy configured, the entire certificate flow is automated:
 
 ## Configuration Encryption
 
-Sensitive fields in the config file — `godaddy.api_key`, `godaddy.api_secret`, and `acme.email` — can be encrypted at rest using AES-256-GCM.
+The sensitive fields `godaddy.api_key`, `godaddy.api_secret` and `acme.email` are stored encrypted (AES-256-GCM, prefixed `enc:` on disk). In memory they are plaintext.
 
-### Enabling encryption
+| Situation | Result |
+|-----------|--------|
+| `PROXYGATE_CONFIG_KEY` set (64 hex characters) | That key is used |
+| Not set | `data/secret.key` (mode 0600) is created on first use and used |
+| Plaintext values in an existing config | Encrypted on the next start |
+| Key missing or wrong | ProxyGate starts and serves all routes; the affected fields are treated as empty, kept unchanged on disk, and reported in the admin UI |
+| `"security": { "encrypt_secrets": false }` | Stored in plaintext |
 
-1. Generate a 32-byte key and export it:
+Set `PROXYGATE_CONFIG_KEY` from your service manager (for example a systemd `EnvironmentFile` with mode 0600) if you don't want the key next to the config.
 
-   ```bash
-   export PROXYGATE_CONFIG_KEY=$(openssl rand -hex 32)
-   ```
-
-2. Store the key securely (e.g. a systemd `EnvironmentFile`, a secrets manager, or a `.env` file that is **not** checked into version control):
-
-   ```ini
-   # /etc/proxygate/env  (mode 0600, owned by proxygate user)
-   PROXYGATE_CONFIG_KEY=<your-64-hex-char-key>
-   ```
-
-3. Start ProxyGate with the variable in scope. On first write, the config manager encrypts any plaintext sensitive fields and saves them back to disk with an `enc:` prefix.
-
-### Behaviour
-
-| Scenario | Result |
-|----------|--------|
-| `PROXYGATE_CONFIG_KEY` set, fields plaintext | Fields encrypted on next save |
-| `PROXYGATE_CONFIG_KEY` set, fields already `enc:…` | Left unchanged (idempotent) |
-| `PROXYGATE_CONFIG_KEY` absent, no encrypted fields | Runs without encryption (plaintext config) |
-| `PROXYGATE_CONFIG_KEY` absent, encrypted fields present | **Startup fails** — key required to decrypt |
-
-In memory, all fields are always plaintext; only the on-disk JSON carries the `enc:` prefix.
-
-### Key rotation
-
-To rotate the key:
-1. Start ProxyGate with the **new** key.
-2. The next config save re-encrypts all `enc:` fields with the new key automatically.
+**Changing the key:** values encrypted with the old key cannot be read with a new one. After switching keys, re-enter the GoDaddy credentials and ACME email in the admin UI.
 
 ---
 
@@ -230,7 +210,7 @@ ProxyGate runs a background goroutine that checks all TLS-enabled routes **daily
 
 1. `certmanager` detects expiry < 30 days via the cert's `NotAfter` field.
 2. A new DNS-01 challenge is issued via the ACME client.
-3. If GoDaddy is configured, the `_acme-challenge` TXT record is created and deleted automatically.
+3. The `_acme-challenge` TXT record is published through GoDaddy, so renewal needs GoDaddy credentials; without them it fails and is logged. The record is left in the zone afterwards.
 4. The new cert and key are written atomically (write-to-temp + rename).
 5. The proxy engine hot-reloads the cert in memory — no port 80/443 rebind needed.
 
@@ -282,37 +262,35 @@ not in source. See [docs/deployment.md](docs/deployment.md) for details.
 
 ## Security Considerations
 
-> **WARNING: This software is NOT production-ready without a security audit.**
+By default the admin UI requires a password (set on first start with a one-time code, recoverable with `proxygate passwd`), listens on `127.0.0.1`, accepts only allowlisted networks, rejects cross-site requests, and stores the GoDaddy credentials encrypted. Scripts use API tokens (`proxygate token create`).
 
-Known considerations:
+HTTPS for the admin UI, refusing logins over plain HTTP, session lifetimes and strong password rules are opt-in settings. The [security guide](https://gcis.github.io/proxygate/security.html) covers the threat model, every setting, suggested hardening and the roadmap. To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
-- **Admin UI** binds to `127.0.0.1` by default — do NOT expose to the internet
-- **GoDaddy API credentials** are stored in the config file — use config encryption (see [Configuration Encryption](#configuration-encryption)) and protect file permissions
-- **ACME account key** is stored on disk — back up and protect `certs/account.key`
-- **No authentication** on the admin UI — it relies on being localhost-only
-- **TLS configuration** uses modern cipher suites but has not been formally audited
-- **Input validation** is basic — do not trust user input from untrusted networks
-- **No rate limiting** on the admin API
+Keep in mind:
 
-For production use, consider:
-- Adding authentication to the admin UI
-- Enabling config encryption via `PROXYGATE_CONFIG_KEY` to protect GoDaddy credentials at rest
-- Running behind a hardened reverse proxy (nginx, Caddy) for the admin interface
-- Regular security audits and dependency updates
-- Network-level access controls
+- **GoDaddy API keys** cover the whole GoDaddy account; scope them to what you are comfortable with.
+- **TLS private keys and the ACME account key** in `certs/` are plain files readable only by the service user; back them up and protect them like any web server's keys.
+- **No independent security audit** has been done.
 
 ## API Reference
 
-All endpoints are prefixed with `/api`.
+All endpoints are prefixed with `/api` and, except the public `/api/auth/*` ones, require a signed-in session or `Authorization: Bearer <token>`.
 
 | Method | Path | Description |
 |--------|------|-------------|
+| GET | `/api/auth/status` | Setup and sign-in state (public) |
+| POST | `/api/auth/setup` | Set the first password with the setup code (public) |
+| POST | `/api/auth/login` | Sign in (public) |
+| POST | `/api/auth/logout` | Sign out |
+| POST | `/api/auth/password` | Change the admin password |
 | GET | `/api/config` | Get current configuration |
-| PUT | `/api/config/server` | Update server config |
+| PUT | `/api/config/server` | Update server config (partial; returns `restart_required`) |
+| GET | `/api/security/status` | Encryption, CSP, rate-limit and allowlist posture |
 | GET | `/api/routes` | List all routes |
 | POST | `/api/routes` | Create a route |
 | GET | `/api/routes/{id}` | Get a specific route |
-| PUT | `/api/routes/{id}` | Update a route |
+| PUT | `/api/routes/{id}` | Update a route (partial merge) |
+| PATCH | `/api/routes/{id}/toggle` | Enable/disable a route |
 | DELETE | `/api/routes/{id}` | Delete a route |
 | GET | `/api/status` | Get proxy status |
 | POST | `/api/acme/request` | Request a certificate |
@@ -321,11 +299,12 @@ All endpoints are prefixed with `/api`.
 | PUT | `/api/acme/config` | Update ACME settings |
 | PUT | `/api/godaddy/config` | Update GoDaddy credentials |
 | POST | `/api/godaddy/verify` | Test GoDaddy connection |
-| GET | `/api/godaddy/domains` | List GoDaddy domains |
+| GET | `/api/godaddy/domains` | List active GoDaddy domains (`?include_inactive=true` for all) |
 | GET | `/api/godaddy/domains/{d}/records` | List DNS records |
 | POST | `/api/godaddy/domains/{d}/records` | Create DNS record |
 | DELETE | `/api/godaddy/domains/{d}/records/{type}/{name}` | Delete DNS record |
 | POST | `/api/godaddy/auto-dns` | Auto-create DNS record |
+| GET | `/api/certs/status` | Certificate expiry and renewal metrics |
 | GET | `/ws` | WebSocket for live updates |
 
 ## License

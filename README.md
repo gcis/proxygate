@@ -4,7 +4,7 @@
 [![Coverage](https://codecov.io/gh/gcis/proxygate/branch/main/graph/badge.svg?cachebust=2)](https://codecov.io/gh/gcis/proxygate)
 [![Docs](https://img.shields.io/badge/docs-online-blue)](https://gcis.github.io/proxygate/)
 
-Trusted HTTPS for your private services, without opening a port. ProxyGate gives the services on your LAN, VPN or home server their own domains and browser-trusted Let's Encrypt certificates. It proves domain ownership through your GoDaddy DNS (the DNS-01 challenge) instead of letting Let's Encrypt connect to your machine, and manages routes, certificates and DNS records from one small web UI.
+A self-hosted reverse proxy in one small binary. ProxyGate routes domains and paths to your services, issues and renews Let's Encrypt certificates through GoDaddy DNS, and manages your DNS records, with a web UI, a REST API and a single JSON config file. No Docker, no database, nothing else to install.
 
 ## Documentation
 
@@ -14,11 +14,11 @@ Full docs: <https://gcis.github.io/proxygate/>
 
 ## Features
 
-- **Certificates for private services** — DNS-01 via GoDaddy means services reachable only on your LAN or VPN get browser-trusted certificates, with no inbound ports opened
+- **Certificates handled for you** — Let's Encrypt via the DNS-01 challenge: the TXT record is published through the GoDaddy API, so Let's Encrypt never has to connect to the machine
 - **Routes, certificates and DNS in one UI** — add a route, request a certificate (the challenge TXT record is published for you), and create A/CNAME records without leaving the page
 - **Automatic renewal** — a daily check renews certificates with 30 days or fewer left and hot-reloads them without a restart (renewal needs GoDaddy credentials)
 - **Domain and path routing** — longest path prefix wins; WebSocket and server-sent events pass through; route changes apply live
-- **Small footprint** — one ~3.5 MB download, no Docker or database, one JSON config; about 14 MB of RAM and 0.1% CPU with six routes on a small ARM edge device; starts in about 10 ms; binds ports 80/443 without root
+- **Small footprint** — one ~3.5 MB download, no Docker or database, one JSON config; about 14 MB of RAM with six routes on a small ARM edge device, with a small CPU footprint; starts in about 10 ms; binds ports 80/443 without root
 - **Locked-down admin** — password with a one-time setup code and `proxygate passwd` recovery, API tokens for scripts, localhost-only by default, network allowlist, GoDaddy credentials encrypted at rest by default
 - **Optional hardening** — HTTPS for the admin UI, refusing logins over plain HTTP, session lifetimes and strong password rules ([security guide](https://gcis.github.io/proxygate/security.html))
 
@@ -51,7 +51,7 @@ Restrict admin UI access to specific networks from the command line:
 
 The flag can be repeated and is saved to the config. If omitted, the admin UI defaults to localhost only (`127.0.0.0/8`, `::1/128`). Networks can also be configured in the JSON config or through the Settings page in the UI.
 
-The admin UI listens on `127.0.0.1` by default, so to reach it from another machine also set `"admin_host": "0.0.0.0"` (or the machine's LAN address) in the config. The admin UI also requires a password; for HTTPS and stricter login rules see the [security guide](https://gcis.github.io/proxygate/security.html#advanced).
+The admin UI listens on `127.0.0.1` by default, so to reach it from another machine also set `"admin_host": "0.0.0.0"` (or one of the machine's own addresses) in the config. The admin UI also requires a password; for HTTPS and stricter login rules see the [security guide](https://gcis.github.io/proxygate/security.html#advanced).
 
 ### Using Go directly
 
@@ -233,9 +233,9 @@ For full production deployment instructions — systemd with `AmbientCapabilitie
 make build
 
 # Install binary and create service user
+sudo mkdir -p /opt/proxygate/{data,certs}
 sudo cp bin/proxygate /opt/proxygate/proxygate
 sudo useradd --system --no-create-home --shell /usr/sbin/nologin proxygate
-sudo mkdir -p /opt/proxygate/{data,certs}
 sudo chown -R proxygate:proxygate /opt/proxygate
 
 # Install unit file (already has AmbientCapabilities=CAP_NET_BIND_SERVICE)
@@ -246,6 +246,9 @@ sudo systemctl enable --now proxygate
 
 The unit file runs ProxyGate as the `proxygate` user with `CAP_NET_BIND_SERVICE`,
 so it can bind ports 80/443 **without root**.
+
+To start it at boot on macOS (launchd) or Windows (Task Scheduler), see
+[Start at boot on macOS and Windows](docs/deployment.md#start-at-boot-on-macos-and-windows).
 
 ### Running on Port 80/443 without systemd
 

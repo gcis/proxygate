@@ -33,6 +33,7 @@ port 80 and 443.
 ```bash
 # 1. Build or download the binary
 make build           # or: go build -o bin/proxygate ./cmd/proxygate/
+sudo mkdir -p /opt/proxygate
 sudo cp bin/proxygate /opt/proxygate/proxygate
 
 # 2. Create a dedicated system user (no login shell, no home dir)
@@ -88,6 +89,71 @@ CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 These two lines are all that is needed. The process never has root UID.
 
 ---
+
+## Start at boot on macOS and Windows
+
+ProxyGate is a single program, so any service manager can run it. Give it an
+absolute `--config` path and set its working directory: certificates are saved
+in `certs/` relative to where it starts. Neither macOS nor Windows restricts
+ports below 1024, so no capability setup is needed.
+
+### macOS (launchd)
+
+```bash
+# Install the binary in its own folder
+sudo mkdir -p /usr/local/proxygate/data
+sudo cp bin/proxygate /usr/local/proxygate/
+sudo chown -R "$USER" /usr/local/proxygate
+
+# Start it at boot, as your user, and restart it if it stops
+sudo tee /Library/LaunchDaemons/proxygate.plist >/dev/null <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>proxygate</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/proxygate/proxygate</string>
+    <string>--config</string>
+    <string>/usr/local/proxygate/data/proxygate.json</string>
+  </array>
+  <key>WorkingDirectory</key><string>/usr/local/proxygate</string>
+  <key>UserName</key><string>$USER</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/usr/local/proxygate/proxygate.log</string>
+  <key>StandardErrorPath</key><string>/usr/local/proxygate/proxygate.log</string>
+</dict>
+</plist>
+EOF
+sudo launchctl bootstrap system /Library/LaunchDaemons/proxygate.plist
+```
+
+Logs go to `/usr/local/proxygate/proxygate.log`. To stop it:
+`sudo launchctl bootout system /Library/LaunchDaemons/proxygate.plist`.
+
+### Windows (Task Scheduler)
+
+```powershell
+# In PowerShell as Administrator, next to the downloaded proxygate.exe
+$dir = "C:\ProxyGate"
+New-Item -ItemType Directory -Force "$dir\data" | Out-Null
+Copy-Item .\proxygate.exe $dir
+
+# Start it at boot and restart it if it stops
+$action   = New-ScheduledTaskAction -Execute "$dir\proxygate.exe" `
+               -Argument "--config $dir\data\proxygate.json" -WorkingDirectory $dir
+$trigger  = New-ScheduledTaskTrigger -AtStartup
+$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit 0 `
+               -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+Register-ScheduledTask -TaskName ProxyGate -Action $action -Trigger $trigger `
+               -Settings $settings -User SYSTEM -RunLevel Highest
+Start-ScheduledTask -TaskName ProxyGate
+```
+
+Task Scheduler does not keep console output; check the task's status with
+`Get-ScheduledTask -TaskName ProxyGate | Get-ScheduledTaskInfo`.
 
 ## Option 2 — `setcap` (non-systemd setups)
 

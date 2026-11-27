@@ -1034,3 +1034,22 @@ a:hover {
     .site-nav a.gh-btn,
     .gh-arrow { transition: none; }
 }
+
+/* Start at boot, under the quick start */
+.boot-intro {
+    margin: 40px 0 16px;
+    max-width: 760px;
+}
+
+.boot-intro h3 {
+    font-size: 1.1rem;
+    margin-bottom: 8px;
+}
+
+.boot-intro p {
+    color: var(--text-secondary);
+}
+
+.boot-block + .boot-block {
+    margin-top: 16px;
+}

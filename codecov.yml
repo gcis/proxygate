@@ -1,0 +1,15 @@
+# Coverage gates for pull requests. Codecov fails the check when either
+# number drops below target, so coverage cannot quietly regress.
+coverage:
+  status:
+    project:
+      default:
+        target: 80%
+        threshold: 1%   # allow small noise between runs
+    patch:
+      default:
+        target: 80%     # lines changed by a pull request
+
+ignore:
+  # Fake ACME server used only by tests.
+  - "internal/acmetest"

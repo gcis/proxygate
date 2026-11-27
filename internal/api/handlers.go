@@ -50,6 +50,10 @@ type Server struct {
 	hashSlots    chan struct{}
 	security     config.SecurityConfig
 	dataDir      string
+
+	// dnsPropagationWait is how long ACME completion waits after publishing
+	// the TXT record through GoDaddy (GoDaddy usually propagates within 30s).
+	dnsPropagationWait time.Duration
 }
 
 func NewServer(
@@ -79,6 +83,7 @@ func NewServer(
 	s.sessions = auth.NewSessions(s.security.SessionIdle(), s.security.SessionMax())
 	s.loginLimiter = auth.NewLoginLimiter(loginMaxFailures, loginWindow)
 	s.hashSlots = make(chan struct{}, maxConcurrentHashes)
+	s.dnsPropagationWait = 30 * time.Second
 
 	s.registerRoutes()
 
@@ -678,7 +683,7 @@ func (s *Server) handleACMEComplete(w http.ResponseWriter, r *http.Request) {
 
 			// Wait for DNS propagation (GoDaddy typically propagates within 30s)
 			s.logger.Info("waiting for DNS propagation", "seconds", 30)
-			time.Sleep(30 * time.Second)
+			time.Sleep(s.dnsPropagationWait)
 		}
 	}
 
@@ -1091,6 +1096,12 @@ func (s *Server) handleCertsStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) Start(addr string) error {
+	return s.Serve(context.Background(), addr)
+}
+
+// Serve runs the admin listener until ctx is cancelled, then shuts it down
+// gracefully. It returns nil after a clean shutdown.
+func (s *Server) Serve(ctx context.Context, addr string) error {
 	rateLimiter := NewRateLimiter(RateLimitRequests, RateLimitWindow)
 	cfg := s.configMgr.Get()
 
@@ -1112,18 +1123,35 @@ func (s *Server) Start(addr string) error {
 		MaxHeaderBytes:    1 << 20, // 1MB
 	}
 
+	stopped := make(chan struct{})
+	defer close(stopped)
+	go func() {
+		select {
+		case <-ctx.Done():
+			shutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_ = server.Shutdown(shutCtx)
+		case <-stopped:
+		}
+	}()
+
+	var err error
 	if s.security.AdminTLS.Enabled {
-		tlsCfg, fingerprint, err := s.adminTLSConfig()
-		if err != nil {
-			return err
+		tlsCfg, fingerprint, tlsErr := s.adminTLSConfig()
+		if tlsErr != nil {
+			return tlsErr
 		}
 		server.TLSConfig = tlsCfg
 		s.logger.Info("starting admin API over HTTPS", "addr", addr, "cert_sha256", fingerprint)
-		return server.ListenAndServeTLS("", "")
+		err = server.ListenAndServeTLS("", "")
+	} else {
+		s.logger.Info("starting admin API", "addr", addr)
+		err = server.ListenAndServe()
 	}
-
-	s.logger.Info("starting admin API", "addr", addr)
-	return server.ListenAndServe()
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
 }
 
 func (s *Server) Handler() http.Handler {

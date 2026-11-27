@@ -18,15 +18,15 @@ import (
 // runAdminCommand handles the maintenance subcommands. They work on the
 // files next to the config, so anyone who can act as the service user (or
 // root) can recover access; see docs/security.md.
-func runAdminCommand(args []string) (handled bool, code int) {
+func runAdminCommand(args []string, stdin *os.File, stdout, stderr io.Writer) (handled bool, code int) {
 	if len(args) == 0 {
 		return false, 0
 	}
 	switch args[0] {
 	case "passwd":
-		return true, runPasswd(args[1:])
+		return true, runPasswd(args[1:], stdin, stdout, stderr)
 	case "token":
-		return true, runToken(args[1:])
+		return true, runToken(args[1:], stdout, stderr)
 	}
 	return false, 0
 }
@@ -39,8 +39,9 @@ func authStoreFor(configPath string) (*auth.Store, string, error) {
 	return auth.NewStore(dir), dir, nil
 }
 
-func runPasswd(args []string) int {
+func runPasswd(args []string, stdin *os.File, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("passwd", flag.ContinueOnError)
+	fs.SetOutput(stderr)
 	configPath := fs.String("config", "./data/proxygate.json", "Path to config file")
 	generate := fs.Bool("generate", false, "Generate a random password and print it")
 	policy := fs.String("policy", "", `Password rules: "strong" (12+ characters, no common passwords) or "basic" (8+). Default: keep the current setting`)
@@ -60,48 +61,48 @@ func runPasswd(args []string) int {
 		v := *policy == "strong"
 		strong = &v
 	default:
-		fmt.Fprintln(os.Stderr, `--policy must be "strong" or "basic"`)
+		fmt.Fprintln(stderr, `--policy must be "strong" or "basic"`)
 		return 2
 	}
 
 	store, dir, err := authStoreFor(*configPath)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
+		fmt.Fprintln(stderr, "error:", err)
 		return 1
 	}
 
 	var password string
 	if *generate {
 		if password, err = auth.RandomPassword(); err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
+			fmt.Fprintln(stderr, "error:", err)
 			return 1
 		}
-	} else if password, err = readNewPassword(); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
+	} else if password, err = readNewPassword(stdin, stderr); err != nil {
+		fmt.Fprintln(stderr, "error:", err)
 		return 1
 	}
 
 	if err := store.SetPassword(password, strong); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
+		fmt.Fprintln(stderr, "error:", err)
 		return 1
 	}
 	matchOwnership(*configPath, filepath.Join(dir, auth.AuthFileName))
 
 	if *generate {
-		fmt.Println(password)
-		fmt.Fprintln(os.Stderr, "Admin password set to the value above. All admin sessions are signed out.")
+		fmt.Fprintln(stdout, password)
+		fmt.Fprintln(stderr, "Admin password set to the value above. All admin sessions are signed out.")
 	} else {
-		fmt.Println("Admin password updated. All admin sessions are signed out.")
+		fmt.Fprintln(stdout, "Admin password updated. All admin sessions are signed out.")
 	}
 	return 0
 }
 
 // readNewPassword prompts twice without echo on a terminal, or reads one
 // line from stdin when piped (for automation).
-func readNewPassword() (string, error) {
-	fd := int(os.Stdin.Fd())
+func readNewPassword(stdin *os.File, stderr io.Writer) (string, error) {
+	fd := int(stdin.Fd())
 	if !term.IsTerminal(fd) {
-		line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+		line, err := bufio.NewReader(stdin).ReadString('\n')
 		if err != nil && !errors.Is(err, io.EOF) {
 			return "", err
 		}
@@ -111,15 +112,15 @@ func readNewPassword() (string, error) {
 		}
 		return pw, nil
 	}
-	fmt.Fprint(os.Stderr, "New admin password: ")
+	fmt.Fprint(stderr, "New admin password: ")
 	first, err := term.ReadPassword(fd)
-	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(stderr)
 	if err != nil {
 		return "", err
 	}
-	fmt.Fprint(os.Stderr, "Repeat password: ")
+	fmt.Fprint(stderr, "Repeat password: ")
 	second, err := term.ReadPassword(fd)
-	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(stderr)
 	if err != nil {
 		return "", err
 	}
@@ -129,10 +130,10 @@ func readNewPassword() (string, error) {
 	return string(first), nil
 }
 
-func runToken(args []string) int {
+func runToken(args []string, stdout, stderr io.Writer) int {
 	usage := func() {
-		fmt.Fprintln(os.Stderr, "usage: proxygate token create|list|revoke [name] [--config path]")
-		fmt.Fprintln(os.Stderr, "API tokens authenticate scripts with: Authorization: Bearer <token>")
+		fmt.Fprintln(stderr, "usage: proxygate token create|list|revoke [name] [--config path]")
+		fmt.Fprintln(stderr, "API tokens authenticate scripts with: Authorization: Bearer <token>")
 	}
 	if len(args) == 0 {
 		usage()
@@ -140,6 +141,7 @@ func runToken(args []string) int {
 	}
 	action := args[0]
 	fs := flag.NewFlagSet("token", flag.ContinueOnError)
+	fs.SetOutput(stderr)
 	configPath := fs.String("config", "./data/proxygate.json", "Path to config file")
 	// Allow the name before or after the flags.
 	var name string
@@ -156,7 +158,7 @@ func runToken(args []string) int {
 
 	store, dir, err := authStoreFor(*configPath)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
+		fmt.Fprintln(stderr, "error:", err)
 		return 1
 	}
 
@@ -168,23 +170,23 @@ func runToken(args []string) int {
 		}
 		secret, err := store.CreateToken(name)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
+			fmt.Fprintln(stderr, "error:", err)
 			return 1
 		}
 		matchOwnership(*configPath, filepath.Join(dir, auth.AuthFileName))
-		fmt.Println(secret)
-		fmt.Fprintf(os.Stderr, "Token %q created. It is shown only once; store it somewhere safe.\n", name)
+		fmt.Fprintln(stdout, secret)
+		fmt.Fprintf(stderr, "Token %q created. It is shown only once; store it somewhere safe.\n", name)
 	case "list":
 		tokens, err := store.Tokens()
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
+			fmt.Fprintln(stderr, "error:", err)
 			return 1
 		}
 		if len(tokens) == 0 {
-			fmt.Println("No API tokens.")
+			fmt.Fprintln(stdout, "No API tokens.")
 		}
 		for _, t := range tokens {
-			fmt.Printf("%s\tcreated %s\n", t.Name, t.CreatedAt)
+			fmt.Fprintf(stdout, "%s\tcreated %s\n", t.Name, t.CreatedAt)
 		}
 	case "revoke":
 		if name == "" {
@@ -192,10 +194,10 @@ func runToken(args []string) int {
 			return 2
 		}
 		if err := store.RevokeToken(name); err != nil {
-			fmt.Fprintln(os.Stderr, "error:", err)
+			fmt.Fprintln(stderr, "error:", err)
 			return 1
 		}
-		fmt.Printf("Token %q revoked.\n", name)
+		fmt.Fprintf(stdout, "Token %q revoked.\n", name)
 	default:
 		usage()
 		return 2

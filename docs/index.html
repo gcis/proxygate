@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ProxyGate — Trusted HTTPS for private services</title>
-    <meta name="description" content="ProxyGate gives services on your LAN or VPN their own domains and browser-trusted Let's Encrypt certificates, using GoDaddy DNS instead of open ports. One small binary with a web UI.">
-    <link rel="stylesheet" href="docs.css?v=20261127j">
+    <title>ProxyGate — Self-hosted reverse proxy</title>
+    <meta name="description" content="ProxyGate is a self-hosted reverse proxy in one small binary: domain and path routing, automatic Let&#39;s Encrypt certificates and GoDaddy DNS management, with a web UI and REST API.">
+    <link rel="stylesheet" href="docs.css?v=20261127k">
 </head>
 <body>
     <header class="site-header">
@@ -28,9 +28,9 @@
     <main>
         <section class="hero">
             <div class="container hero-single">
-                <span class="kicker">Reverse proxy for home servers and small machines</span>
-                <h1>Trusted HTTPS for your private services, without opening a port.</h1>
-                <p class="hero-lead">The dashboard on your LAN, the app on your home server, the service on an old laptop: ProxyGate puts each one behind its own domain with a certificate every browser trusts. It proves you own the domain through your GoDaddy DNS instead of letting Let's Encrypt connect to your machine, so nothing has to face the internet. Routes, certificates and DNS records are managed from one small web UI.</p>
+                <span class="kicker">Self-hosted reverse proxy</span>
+                <h1>Routes, HTTPS and DNS in one small binary.</h1>
+                <p class="hero-lead">ProxyGate routes domains and paths to your services, issues and renews Let&#39;s Encrypt certificates, and manages your GoDaddy DNS records. It is one binary with a web UI, a REST API and a single JSON config file. No Docker, no database, nothing else to install.</p>
                 <div class="cta-group">
                     <a href="#quickstart" class="btn btn-primary">Quick start</a>
                     <a href="#fit" class="btn btn-secondary">Is it right for you?</a>
@@ -47,21 +47,21 @@
         <section class="doc-section" id="why">
             <div class="container">
                 <div class="section-header">
-                    <h2>What it fixes</h2>
-                    <p>Three things that make self-hosting more tedious than it should be.</p>
+                    <h2>Why ProxyGate</h2>
+                    <p>Three things it is built around.</p>
                 </div>
                 <div class="why-grid">
                     <div class="why-item">
-                        <h3>Certificate warnings on private services</h3>
-                        <p>Services on a LAN or VPN usually mean self-signed certificates or bare <code>192.168.1.20:5000</code> links. ProxyGate gets Let's Encrypt certificates with the DNS-01 challenge, which never connects to your machine, so <code>app.example.com</code> can point at a private address and still get the padlock. Renewal runs on its own.</p>
+                        <h3>Small footprint</h3>
+                        <p>A 3.5&nbsp;MB download and a single binary with no dependencies. On a small ARM edge device with six routes it uses about 14&nbsp;MB of RAM and little CPU, and starts serving in about 10&nbsp;ms, certificates included.</p>
                     </div>
                     <div class="why-item">
-                        <h3>Three tools for one job</h3>
-                        <p>Adding a service normally means editing proxy config, running certbot and visiting your DNS provider. Here it is one screen: add the route, click <em>Request TLS</em> and the TXT record is published for you, then create the A record if the name is new. Changes apply without a restart.</p>
+                        <h3>Simple to run</h3>
+                        <p>One binary, one JSON config file, a web UI and a REST API. Routes, certificates and DNS settings apply the moment you save them, without a restart. It binds ports 80 and 443 without running as root.</p>
                     </div>
                     <div class="why-item">
-                        <h3>Heavy stacks on small hardware</h3>
-                        <p>No Docker, no database, no runtime to install: one binary and one JSON file. On a small ARM edge device with six routes it uses about 14 MB of RAM and 0.1% CPU, and starts serving in about 10 ms, certificates included. It binds ports 80 and 443 without running as root.</p>
+                        <h3>Certificates handled for you</h3>
+                        <p>Let&#39;s Encrypt certificates through the DNS-01 challenge: ProxyGate publishes the TXT record with the GoDaddy API, so Let&#39;s Encrypt never has to connect to the machine. Certificates renew automatically and reload without dropping connections.</p>
                     </div>
                 </div>
             </div>
@@ -207,7 +207,8 @@
                         <h3>A good fit if</h3>
                         <ul>
                             <li>Your domains are at GoDaddy. Certificate and DNS automation, including renewal, work with GoDaddy today.</li>
-                            <li>You run services at home or on a small server, including ones reachable only on your LAN or a VPN.</li>
+                            <li>You run services locally and want them on your own domains with HTTPS, with little setup: add a route, click <em>Request TLS</em>, done. Certificates are verified through DNS, so this works even if the machine isn&#39;t reachable from the internet. How clients reach the machine is up to your network.</li>
+                            <li>You run on small or low-power hardware: about 14&nbsp;MB of RAM and no runtime to install.</li>
                             <li>You prefer a web UI to config files, and one binary to a container stack.</li>
                             <li>You want to script it: everything in the UI is also a <a href="api.html">REST API</a>, with API tokens for automation.</li>
                         </ul>
@@ -229,7 +230,7 @@
             <div class="container">
                 <div class="section-header">
                     <h2>Quick start</h2>
-                    <p>Build with Go 1.24 or later. For running it as a service and binding ports 80 and 443, see <a href="https://github.com/gcis/proxygate/blob/main/docs/deployment.md">deployment.md</a>.</p>
+                    <p>Build with Go 1.24 or later. To start it at boot, see <a href="#start-at-boot">below</a>. For ports 80 and 443 and other setups, see <a href="https://github.com/gcis/proxygate/blob/main/docs/deployment.md">deployment.md</a>.</p>
                 </div>
                 <div class="code-block">
                     <div class="code-block-header">
@@ -252,9 +253,84 @@
 <span class="comment"># Lost the password? Set a new one from the machine (signs everyone out):</span>
 <span class="cmd">./bin/proxygate</span> <span class="arg">passwd --config</span> <span class="path">./data/proxygate.json</span>
 
-<span class="comment"># To use the admin UI from your LAN, set "admin_host": "0.0.0.0" in the config,</span>
-<span class="comment"># then allow your network (the flag can be repeated and is saved to the config):</span>
+<span class="comment"># To reach the admin UI from another machine, set "admin_host": "0.0.0.0" in the config,</span>
+<span class="comment"># then allow that machine&#39;s address or network (repeatable, saved to the config):</span>
 <span class="cmd">./bin/proxygate</span> <span class="arg">--config</span> <span class="path">./data/proxygate.json</span> <span class="arg">--allow-network</span> <span class="path">192.168.1.0/24</span></code></pre>
+                </div>
+
+                <div class="boot-intro" id="start-at-boot">
+                    <h3>Start it at boot</h3>
+                    <p>ProxyGate is a single program, so any service manager can run it. Point it at an absolute config path and set its working directory: certificates are saved in <code>certs/</code> relative to where it starts. The setup code then appears in the <code>data</code> folder you chose.</p>
+                </div>
+                <div class="code-block boot-block">
+                    <div class="code-block-header">
+                        <span>Linux · systemd</span>
+                        <button class="btn btn-secondary btn-sm" type="button" data-copy-code="bootLinux">Copy</button>
+                    </div>
+                    <pre><code id="bootLinux"><span class="comment"># From the cloned repo: install the binary and a service user</span>
+sudo mkdir -p /opt/proxygate/data /opt/proxygate/certs
+sudo cp bin/proxygate /opt/proxygate/
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin proxygate
+sudo chown -R proxygate:proxygate /opt/proxygate
+
+<span class="comment"># The unit runs it as that user and lets it bind ports 80 and 443</span>
+sudo cp examples/systemd/proxygate.service /etc/systemd/system/
+sudo systemctl enable --now proxygate
+journalctl -u proxygate -f</code></pre>
+                </div>
+                <div class="code-block boot-block">
+                    <div class="code-block-header">
+                        <span>macOS · launchd</span>
+                        <button class="btn btn-secondary btn-sm" type="button" data-copy-code="bootMac">Copy</button>
+                    </div>
+                    <pre><code id="bootMac"><span class="comment"># Install the binary in its own folder</span>
+sudo mkdir -p /usr/local/proxygate/data
+sudo cp bin/proxygate /usr/local/proxygate/
+sudo chown -R &quot;$USER&quot; /usr/local/proxygate
+
+<span class="comment"># Start it at boot, as your user, and restart it if it stops</span>
+sudo tee /Library/LaunchDaemons/proxygate.plist &gt;/dev/null &lt;&lt;EOF
+&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;!DOCTYPE plist PUBLIC &quot;-//Apple//DTD PLIST 1.0//EN&quot; &quot;http://www.apple.com/DTDs/PropertyList-1.0.dtd&quot;&gt;
+&lt;plist version=&quot;1.0&quot;&gt;
+&lt;dict&gt;
+  &lt;key&gt;Label&lt;/key&gt;&lt;string&gt;proxygate&lt;/string&gt;
+  &lt;key&gt;ProgramArguments&lt;/key&gt;
+  &lt;array&gt;
+    &lt;string&gt;/usr/local/proxygate/proxygate&lt;/string&gt;
+    &lt;string&gt;--config&lt;/string&gt;
+    &lt;string&gt;/usr/local/proxygate/data/proxygate.json&lt;/string&gt;
+  &lt;/array&gt;
+  &lt;key&gt;WorkingDirectory&lt;/key&gt;&lt;string&gt;/usr/local/proxygate&lt;/string&gt;
+  &lt;key&gt;UserName&lt;/key&gt;&lt;string&gt;$USER&lt;/string&gt;
+  &lt;key&gt;RunAtLoad&lt;/key&gt;&lt;true/&gt;
+  &lt;key&gt;KeepAlive&lt;/key&gt;&lt;true/&gt;
+  &lt;key&gt;StandardOutPath&lt;/key&gt;&lt;string&gt;/usr/local/proxygate/proxygate.log&lt;/string&gt;
+  &lt;key&gt;StandardErrorPath&lt;/key&gt;&lt;string&gt;/usr/local/proxygate/proxygate.log&lt;/string&gt;
+&lt;/dict&gt;
+&lt;/plist&gt;
+EOF
+sudo launchctl bootstrap system /Library/LaunchDaemons/proxygate.plist</code></pre>
+                </div>
+                <div class="code-block boot-block">
+                    <div class="code-block-header">
+                        <span>Windows · Task Scheduler</span>
+                        <button class="btn btn-secondary btn-sm" type="button" data-copy-code="bootWin">Copy</button>
+                    </div>
+                    <pre><code id="bootWin"><span class="comment"># In PowerShell as Administrator, next to the downloaded proxygate.exe</span>
+$dir = &quot;C:\ProxyGate&quot;
+New-Item -ItemType Directory -Force &quot;$dir\data&quot; | Out-Null
+Copy-Item .\proxygate.exe $dir
+
+<span class="comment"># Start it at boot and restart it if it stops</span>
+$action   = New-ScheduledTaskAction -Execute &quot;$dir\proxygate.exe&quot; `
+               -Argument &quot;--config $dir\data\proxygate.json&quot; -WorkingDirectory $dir
+$trigger  = New-ScheduledTaskTrigger -AtStartup
+$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit 0 `
+               -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+Register-ScheduledTask -TaskName ProxyGate -Action $action -Trigger $trigger `
+               -Settings $settings -User SYSTEM -RunLevel Highest
+Start-ScheduledTask -TaskName ProxyGate</code></pre>
                 </div>
             </div>
         </section>

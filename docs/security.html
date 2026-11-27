@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Security — ProxyGate</title>
     <meta name="description" content="How ProxyGate protects its admin UI and stored credentials by default, and the advanced settings that lock it down further.">
-    <link rel="stylesheet" href="docs.css?v=20261127j">
+    <link rel="stylesheet" href="docs.css?v=20261127k">
 </head>
 <body>
     <header class="site-header">
@@ -92,7 +92,7 @@
                             <table>
                                 <thead><tr><th>Side</th><th>Who reaches it</th><th>What protects it</th></tr></thead>
                                 <tbody>
-                                    <tr><td>Proxy</td><td>Anyone on the internet, on <code>http_port</code> and <code>https_port</code></td><td>TLS and header timeouts. It only forwards to the targets you configured.</td></tr>
+                                    <tr><td>Proxy</td><td>Anyone who can reach <code>http_port</code> and <code>https_port</code>. Plan as if that is the whole internet.</td><td>TLS and header timeouts. It only forwards to the targets you configured.</td></tr>
                                     <tr><td>Admin UI and API</td><td>You, on <code>admin_port</code></td><td>Network allowlist, login, and optionally HTTPS.</td></tr>
                                 </tbody>
                             </table>

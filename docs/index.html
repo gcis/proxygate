@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ProxyGate — Self-Hosted Reverse Proxy</title>
-    <meta name="description" content="ProxyGate is a self-hosted reverse proxy in a single Go binary: route your own domains to local services with automatic Let's Encrypt certificates and GoDaddy DNS.">
-    <link rel="stylesheet" href="docs.css">
+    <title>ProxyGate — Trusted HTTPS for private services</title>
+    <meta name="description" content="ProxyGate gives services on your LAN or VPN their own domains and browser-trusted Let's Encrypt certificates, using GoDaddy DNS instead of open ports. One small binary with a web UI.">
+    <link rel="stylesheet" href="docs.css?v=20261127j">
 </head>
 <body>
     <header class="site-header">
@@ -14,13 +14,12 @@
                 <span class="brand-mark" aria-hidden="true"></span>
                 <span>ProxyGate</span>
             </a>
-            <nav class="site-nav" aria-label="Documentation navigation">
-                <a href="#features">Features</a>
-                <a href="#how-it-works">How it works</a>
-                <a href="#admin">Admin UI</a>
-                <a href="#quickstart">Quick start</a>
+            <nav class="site-nav" aria-label="Site">
+                <a href="./" class="active" aria-current="page">Overview</a>
+                <a href="./#quickstart">Quick start</a>
                 <a href="security.html">Security</a>
                 <a href="api.html">API reference</a>
+                <a class="gh-btn" href="https://github.com/gcis/proxygate" aria-label="ProxyGate on GitHub"><span class="gh-prompt" aria-hidden="true">$</span>github<span class="gh-arrow" aria-hidden="true">↗</span></a>
             </nav>
             <a href="/" class="btn btn-primary" data-console-link>Open admin UI</a>
         </div>
@@ -29,12 +28,41 @@
     <main>
         <section class="hero">
             <div class="container hero-single">
-                <span class="kicker">Self-hosted reverse proxy</span>
-                <h1>Put your self-hosted apps on your own domains, with HTTPS.</h1>
-                <p class="hero-lead">ProxyGate is a single Go binary. It routes requests by domain and path to services on your machine or network, gets Let's Encrypt certificates over DNS-01, and keeps them renewed through the GoDaddy DNS API. Routes and certificates are managed from a built-in web UI or a REST API.</p>
+                <span class="kicker">Reverse proxy for home servers and small machines</span>
+                <h1>Trusted HTTPS for your private services, without opening a port.</h1>
+                <p class="hero-lead">The dashboard on your LAN, the app on your home server, the service on an old laptop: ProxyGate puts each one behind its own domain with a certificate every browser trusts. It proves you own the domain through your GoDaddy DNS instead of letting Let's Encrypt connect to your machine, so nothing has to face the internet. Routes, certificates and DNS records are managed from one small web UI.</p>
                 <div class="cta-group">
                     <a href="#quickstart" class="btn btn-primary">Quick start</a>
-                    <a href="api.html" class="btn btn-secondary">API reference</a>
+                    <a href="#fit" class="btn btn-secondary">Is it right for you?</a>
+                </div>
+                <div class="proof-strip" role="list" aria-label="Footprint">
+                    <div class="proof" role="listitem"><span class="proof-num">3.5 MB</span><span class="proof-label">download, one file</span></div>
+                    <div class="proof" role="listitem"><span class="proof-num">~14 MB</span><span class="proof-label">RAM on a small edge device</span></div>
+                    <div class="proof" role="listitem"><span class="proof-num">~10 ms</span><span class="proof-label">to start serving</span></div>
+                    <div class="proof" role="listitem"><span class="proof-num">amd64 · arm64</span><span class="proof-label">Linux, macOS, Windows</span></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="doc-section" id="why">
+            <div class="container">
+                <div class="section-header">
+                    <h2>What it fixes</h2>
+                    <p>Three things that make self-hosting more tedious than it should be.</p>
+                </div>
+                <div class="why-grid">
+                    <div class="why-item">
+                        <h3>Certificate warnings on private services</h3>
+                        <p>Services on a LAN or VPN usually mean self-signed certificates or bare <code>192.168.1.20:5000</code> links. ProxyGate gets Let's Encrypt certificates with the DNS-01 challenge, which never connects to your machine, so <code>app.example.com</code> can point at a private address and still get the padlock. Renewal runs on its own.</p>
+                    </div>
+                    <div class="why-item">
+                        <h3>Three tools for one job</h3>
+                        <p>Adding a service normally means editing proxy config, running certbot and visiting your DNS provider. Here it is one screen: add the route, click <em>Request TLS</em> and the TXT record is published for you, then create the A record if the name is new. Changes apply without a restart.</p>
+                    </div>
+                    <div class="why-item">
+                        <h3>Heavy stacks on small hardware</h3>
+                        <p>No Docker, no database, no runtime to install: one binary and one JSON file. On a small ARM edge device with six routes it uses about 14 MB of RAM and 0.1% CPU, and starts serving in about 10 ms, certificates included. It binds ports 80 and 443 without running as root.</p>
+                    </div>
                 </div>
             </div>
         </section>
@@ -42,33 +70,25 @@
         <section class="doc-section" id="features">
             <div class="container">
                 <div class="section-header">
-                    <h2>Features</h2>
-                    <p>What ProxyGate does once it is running.</p>
+                    <h2>What's included</h2>
+                    <p>Everything the three points above rely on.</p>
                 </div>
                 <div class="cap-grid">
                     <div class="cap-item">
                         <h3>Domain and path routing</h3>
-                        <p>Send <code>app.example.com</code> to one service and <code>app.example.com/api</code> to another. The longest matching path prefix wins, WebSocket and server-sent event connections pass through, and route changes take effect without a restart.</p>
-                    </div>
-                    <div class="cap-item">
-                        <h3>HTTPS with Let's Encrypt</h3>
-                        <p>Certificates are issued with the DNS-01 challenge, so the machine does not need to be reachable from the internet to get one. Each domain gets its own certificate, served by SNI. HTTP requests to a TLS route are redirected to HTTPS.</p>
+                        <p>Send <code>app.example.com</code> to one service and <code>app.example.com/api</code> to another. The longest matching prefix wins, WebSocket and server-sent event connections pass through, and HTTP requests to a TLS route are redirected to HTTPS.</p>
                     </div>
                     <div class="cap-item">
                         <h3>Automatic renewal</h3>
-                        <p>Once a day ProxyGate checks every TLS route and renews certificates with fewer than 30 days left. Renewal publishes the challenge record through GoDaddy, so it needs GoDaddy credentials; without them you repeat the request before the certificate expires. New certificates are loaded without restarting.</p>
+                        <p>Once a day ProxyGate checks every certificate and renews any with 30 days or fewer left, publishing the challenge record through GoDaddy. New certificates are loaded without dropping connections.</p>
                     </div>
                     <div class="cap-item">
                         <h3>GoDaddy DNS records</h3>
-                        <p>List your domains, then view, create and delete their DNS records. Expired, cancelled and transferred domains are hidden unless you ask for them. The challenge TXT record can be published for you when requesting a certificate.</p>
+                        <p>List your domains and view, create or delete their records from the same UI. Expired, cancelled and transferred domains are hidden unless you ask for them.</p>
                     </div>
                     <div class="cap-item">
-                        <h3>Locked-down admin access</h3>
-                        <p>The admin UI requires a password, set on first start with a one-time code and recoverable from the machine with <code>proxygate passwd</code>. It listens on localhost by default, only accepts the networks you allow, and rejects requests from other websites. HTTPS and stricter login rules are <a href="security.html#advanced">one setting away</a>.</p>
-                    </div>
-                    <div class="cap-item">
-                        <h3>One binary, one config file</h3>
-                        <p>No runtime dependencies. All settings live in one JSON file, written atomically, with the GoDaddy key, secret and ACME email stored encrypted (AES-256-GCM). The proxy keeps serving even if the encryption key goes missing.</p>
+                        <h3>Locked-down admin</h3>
+                        <p>The admin UI needs a password, set on first start with a one-time code and recoverable from the machine. It listens on localhost by default and stores your GoDaddy credentials encrypted. <a href="security.html">More on security</a>.</p>
                     </div>
                 </div>
             </div>
@@ -78,7 +98,7 @@
             <div class="container">
                 <div class="section-header">
                     <h2>How it works</h2>
-                    <p>One process with two sides: the proxy engine serves your visitors on the HTTP and HTTPS ports, and the admin API edits the configuration. Changes are saved to the config file and applied to the proxy straight away; only port and network allowlist changes wait for a restart.</p>
+                    <p>One process with two sides: the proxy engine serves your visitors on the HTTP and HTTPS ports, and the admin API edits the configuration. Routes, certificates and DNS settings apply the moment you save them. Listening ports, the admin address, the network allowlist and the advanced security settings are read at startup, so changes to those apply after a restart.</p>
                 </div>
                 <div class="arch-panel">
                     <svg viewBox="0 0 820 380" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ProxyGate architecture: visitors reach the proxy engine on the HTTP and HTTPS ports; the admin UI and API clients reach the admin API, localhost-only by default; the admin API writes the config manager, which reloads the proxy engine; the certificate manager renews certificates through Let's Encrypt using GoDaddy DNS">
@@ -176,6 +196,35 @@
             </div>
         </section>
 
+        <section class="doc-section" id="fit">
+            <div class="container">
+                <div class="section-header">
+                    <h2>Is it right for you?</h2>
+                    <p>ProxyGate does a few things well. Here is where it fits and where another tool will serve you better.</p>
+                </div>
+                <div class="fit-grid">
+                    <div class="fit-col fit-yes">
+                        <h3>A good fit if</h3>
+                        <ul>
+                            <li>Your domains are at GoDaddy. Certificate and DNS automation, including renewal, work with GoDaddy today.</li>
+                            <li>You run services at home or on a small server, including ones reachable only on your LAN or a VPN.</li>
+                            <li>You prefer a web UI to config files, and one binary to a container stack.</li>
+                            <li>You want to script it: everything in the UI is also a <a href="api.html">REST API</a>, with API tokens for automation.</li>
+                        </ul>
+                    </div>
+                    <div class="fit-col fit-no">
+                        <h3>Look elsewhere if</h3>
+                        <ul>
+                            <li>Your DNS is with a provider other than GoDaddy: other providers aren't supported yet. Until they are, certificates still work if you add the TXT record yourself, but renewal is manual.</li>
+                            <li>You want routes picked up automatically from Docker or Kubernetes labels, as Traefik does, or kept in a config file you edit and reload, as with Caddy. ProxyGate manages routes through its UI and REST API instead.</li>
+                            <li>You already use Docker and want many DNS providers in a UI: Nginx Proxy Manager supports more.</li>
+                            <li>You need load balancing, high availability or a Kubernetes ingress.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <section class="doc-section" id="quickstart">
             <div class="container">
                 <div class="section-header">
@@ -223,6 +272,6 @@
         </div>
     </footer>
 
-    <script src="docs.js"></script>
+    <script src="docs.js?v=20261127"></script>
 </body>
 </html>

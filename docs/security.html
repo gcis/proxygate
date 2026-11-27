@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Security — ProxyGate</title>
     <meta name="description" content="How ProxyGate protects its admin UI and stored credentials by default, and the advanced settings that lock it down further.">
-    <link rel="stylesheet" href="docs.css">
+    <link rel="stylesheet" href="docs.css?v=20261127j">
 </head>
 <body>
     <header class="site-header">
@@ -14,120 +14,326 @@
                 <span class="brand-mark" aria-hidden="true"></span>
                 <span>ProxyGate</span>
             </a>
-            <nav class="site-nav" aria-label="Documentation navigation">
+            <nav class="site-nav" aria-label="Site">
                 <a href="./">Overview</a>
-                <a href="#defaults">Defaults</a>
-                <a href="#recovery">Recovery</a>
-                <a href="#advanced">Advanced settings</a>
-                <a href="#upgrading">Upgrading</a>
-                <a href="#roadmap">Roadmap</a>
+                <a href="./#quickstart">Quick start</a>
+                <a href="security.html" class="active" aria-current="page">Security</a>
                 <a href="api.html">API reference</a>
+                <a class="gh-btn" href="https://github.com/gcis/proxygate" aria-label="ProxyGate on GitHub"><span class="gh-prompt" aria-hidden="true">$</span>github<span class="gh-arrow" aria-hidden="true">↗</span></a>
             </nav>
             <a href="/" class="btn btn-primary" data-console-link>Open admin UI</a>
         </div>
     </header>
 
-    <main class="container prose">
-        <h1>Security</h1>
-        <p>ProxyGate is meant to stay small and local-first: one binary, one config file, sensible defaults. This page explains what those defaults protect, what they don't, and the settings that lock an installation down further.</p>
+    <div class="api-layout">
+        <aside class="api-sidebar" aria-label="Security topics">
+            <div class="api-nav-group">
+                <h3>Overview</h3>
+                <a href="#threat-model">Threat model</a>
+            </div>
+            <div class="api-nav-group">
+                <h3>Defaults</h3>
+                <a href="#admin-login">Admin login</a>
+                <a href="#first-start">First start</a>
+                <a href="#sessions">Sessions</a>
+                <a href="#failed-signins">Failed sign-ins</a>
+                <a href="#password-storage">Password storage</a>
+                <a href="#plain-http">Plain-HTTP warning</a>
+                <a href="#api-tokens">API tokens</a>
+                <a href="#encrypted-credentials">Encrypted credentials</a>
+            </div>
+            <div class="api-nav-group">
+                <h3>Operations</h3>
+                <a href="#recovery">Recovering access</a>
+                <a href="#upgrading">Upgrading</a>
+            </div>
+            <div class="api-nav-group">
+                <h3>Advanced settings</h3>
+                <a href="#advanced">The security section</a>
+                <a href="#admin-tls">admin_tls</a>
+                <a href="#require-secure-login">require_secure_login</a>
+                <a href="#session-lifetimes">Session lifetimes</a>
+                <a href="#encrypt-secrets">encrypt_secrets</a>
+                <a href="#strong-passwords">Strong password rules</a>
+            </div>
+            <div class="api-nav-group">
+                <h3>Guidance</h3>
+                <a href="#hardening">Suggested hardening</a>
+                <a href="#roadmap">Roadmap</a>
+                <a href="#reporting">Reporting a vulnerability</a>
+            </div>
+        </aside>
 
-        <h2 id="threat-model">Threat model</h2>
-        <p>ProxyGate has two sides with very different exposure.</p>
-        <div class="table-scroll">
-            <table>
-                <thead><tr><th>Side</th><th>Who reaches it</th><th>What protects it</th></tr></thead>
-                <tbody>
-                    <tr><td>Proxy</td><td>Anyone on the internet, on <code>http_port</code> and <code>https_port</code></td><td>TLS and header timeouts. It only forwards to the targets you configured.</td></tr>
-                    <tr><td>Admin UI and API</td><td>You, on <code>admin_port</code></td><td>Network allowlist, login, and optionally HTTPS.</td></tr>
-                </tbody>
-            </table>
-        </div>
-        <p>The admin side can change routes, issue certificates and edit DNS records, so it is treated as privileged. Anyone who can read or write ProxyGate's data directory as the service user, or as root, is trusted: that is how password recovery works, and no setting on this page protects against that level of access.</p>
+        <main class="api-main">
+            <div class="api-intro">
+                <h1>Security</h1>
+                <p>ProxyGate stays small and local-first: one binary, one config file, sensible defaults. This page explains what those defaults protect, what they don't, and the settings that lock an installation down further.</p>
+                <div class="api-toolbar">
+                    <div class="tag-legend">
+                        <span><span class="method tag-default">DEFAULT</span> on out of the box</span>
+                        <span><span class="method tag-optin">OPT-IN</span> advanced setting</span>
+                        <span><span class="method tag-cli">CLI</span> run on the machine</span>
+                    </div>
+                    <input type="search" id="apiSearchInput" class="api-search" placeholder="Filter topics..." aria-label="Filter security topics">
+                </div>
+            </div>
 
-        <h2 id="defaults">Defaults</h2>
-        <p>These apply with no configuration.</p>
+            <section class="endpoint-group" id="overview">
+                <h2>Overview</h2>
+                <p>ProxyGate has two sides with very different exposure.</p>
+                <div class="endpoint" id="threat-model">
+                    <div class="endpoint-header">
+                        <span class="method tag-muted">MODEL</span>
+                        <span class="endpoint-path">Threat model</span>
+                        <span class="endpoint-desc">who reaches what, and what protects it</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <div class="table-scroll">
+                            <table>
+                                <thead><tr><th>Side</th><th>Who reaches it</th><th>What protects it</th></tr></thead>
+                                <tbody>
+                                    <tr><td>Proxy</td><td>Anyone on the internet, on <code>http_port</code> and <code>https_port</code></td><td>TLS and header timeouts. It only forwards to the targets you configured.</td></tr>
+                                    <tr><td>Admin UI and API</td><td>You, on <code>admin_port</code></td><td>Network allowlist, login, and optionally HTTPS.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <p>The admin side can change routes, issue certificates and edit DNS records, so it is treated as privileged. Anyone who can read or write ProxyGate's data directory as the service user, or as root, is trusted: that is how password recovery works, and no setting on this page protects against that level of access.</p>
+                    </div>
+                </div>
+            </section>
 
-        <h3>The admin UI requires a login</h3>
-        <ul>
-            <li>The admin UI and every <code>/api/*</code> endpoint require a login. <code>/healthz</code> and <code>/docs/</code> stay public, and the UI's static files load so the sign-in page can show.</li>
-            <li><strong>First start:</strong> no password exists yet, so the admin UI is locked. ProxyGate writes a one-time setup code to <code>data/setup-code</code>, readable by the service user only, and logs where the file is, never the code itself. Open the admin UI, enter the code and choose a password. The file is deleted once used.</li>
-            <li><strong>Sessions</strong> use an <code>HttpOnly</code>, <code>SameSite=Strict</code> cookie, also <code>Secure</code> over HTTPS. Every sign-in gets a new session ID. Sessions end after 12 hours without activity or 7 days in total, on sign-out, and for every browser when the password changes. They are kept in memory, so restarting ProxyGate signs everyone out.</li>
-            <li><strong>Failed sign-ins:</strong> 5 failures from one address within 15 minutes block further attempts from it until the 15 minutes are up.</li>
-            <li><strong>Passwords</strong> are hashed with argon2id using OWASP's recommended parameters (46&nbsp;MiB, 1 iteration, 1 thread) and stored in <code>data/admin-auth.json</code>, separate from <code>proxygate.json</code>. The minimum is 8 characters unless strong rules are chosen (see <a href="#advanced">advanced settings</a>).</li>
-            <li>When the sign-in page is served over plain HTTP to anything other than localhost, it warns that the password crosses the network unencrypted. Tailscale, WireGuard or an SSH tunnel encrypt the connection, so the warning can be ignored there.</li>
-        </ul>
-
-        <h3>API tokens for scripts</h3>
-        <p>Scripts call the API with <code>Authorization: Bearer &lt;token&gt;</code>. Tokens are managed on the machine rather than in the UI, and only a SHA-256 hash of each one is stored.</p>
-<pre><code>proxygate token create backup-script --config ./data/proxygate.json   # prints the token once
+            <section class="endpoint-group" id="defaults">
+                <h2>Defaults</h2>
+                <p>These apply with no configuration.</p>
+                <div class="endpoint" id="admin-login">
+                    <div class="endpoint-header">
+                        <span class="method tag-default">DEFAULT</span>
+                        <span class="endpoint-path">Admin login required</span>
+                        <span class="endpoint-desc">every API call and the live event stream</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <p>Every <code>/api/*</code> endpoint and the live event stream need a signed-in session or an API token. <code>/healthz</code> and <code>/docs/</code> stay public, and the UI's static files load so the sign-in page can show.</p>
+                    </div>
+                </div>
+                <div class="endpoint" id="first-start">
+                    <div class="endpoint-header">
+                        <span class="method tag-default">DEFAULT</span>
+                        <span class="endpoint-path">First start</span>
+                        <span class="endpoint-desc">locked until you set a password</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <p>No password exists yet, so the admin UI is locked. ProxyGate writes a one-time setup code to <code>data/setup-code</code>, readable by the service user only, and logs where the file is, never the code itself. Open the admin UI, enter the code and choose a password. The file is deleted once used.</p>
+                    </div>
+                </div>
+                <div class="endpoint" id="sessions">
+                    <div class="endpoint-header">
+                        <span class="method tag-default">DEFAULT</span>
+                        <span class="endpoint-path">Sessions</span>
+                        <span class="endpoint-desc">12h idle · 7 days max</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <p><code>HttpOnly</code>, <code>SameSite=Strict</code> cookie, also <code>Secure</code> over HTTPS, with a new session ID at every sign-in. Sessions end after 12 hours without activity or 7 days in total, on sign-out, and for every browser when the password changes. They are kept in memory, so restarting ProxyGate signs everyone out.</p>
+                    </div>
+                </div>
+                <div class="endpoint" id="failed-signins">
+                    <div class="endpoint-header">
+                        <span class="method tag-default">DEFAULT</span>
+                        <span class="endpoint-path">Failed sign-ins</span>
+                        <span class="endpoint-desc">5 attempts per 15 minutes</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <p>Five failures from one address within 15 minutes block further attempts from it until the 15 minutes are up. Setup and password changes count the same way.</p>
+                    </div>
+                </div>
+                <div class="endpoint" id="password-storage">
+                    <div class="endpoint-header">
+                        <span class="method tag-default">DEFAULT</span>
+                        <span class="endpoint-path">Password storage</span>
+                        <span class="endpoint-desc">argon2id</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <p>Hashed with argon2id using OWASP's recommended parameters (46&nbsp;MiB, 1 iteration, 1 thread) in <code>data/admin-auth.json</code>, separate from <code>proxygate.json</code>. The minimum is 8 characters unless <a href="#strong-passwords">strong rules</a> are chosen.</p>
+                    </div>
+                </div>
+                <div class="endpoint" id="plain-http">
+                    <div class="endpoint-header">
+                        <span class="method tag-default">DEFAULT</span>
+                        <span class="endpoint-path">Plain-HTTP warning</span>
+                        <span class="endpoint-desc">shown on the sign-in page</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <p>When the sign-in page is served over plain HTTP to anything other than localhost, it warns that the password crosses the network unencrypted. A VPN or an SSH tunnel already encrypts the connection, so the warning can be ignored there. To refuse such logins instead, see <a href="#require-secure-login">require_secure_login</a>.</p>
+                    </div>
+                </div>
+                <div class="endpoint" id="api-tokens">
+                    <div class="endpoint-header">
+                        <span class="method tag-default">DEFAULT</span>
+                        <span class="endpoint-path">API tokens</span>
+                        <span class="endpoint-desc">for scripts · only hashes stored</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <p>Scripts call the API with <code>Authorization: Bearer &lt;token&gt;</code>. Tokens are managed on the machine rather than in the UI, and only a SHA-256 hash of each one is stored.</p>
+                        <pre>proxygate token create backup-script --config ./data/proxygate.json   # prints the token once
 proxygate token list --config ./data/proxygate.json
-proxygate token revoke backup-script --config ./data/proxygate.json</code></pre>
+proxygate token revoke backup-script --config ./data/proxygate.json</pre>
+                    </div>
+                </div>
+                <div class="endpoint" id="encrypted-credentials">
+                    <div class="endpoint-header">
+                        <span class="method tag-default">DEFAULT</span>
+                        <span class="endpoint-path">Encrypted credentials</span>
+                        <span class="endpoint-desc">GoDaddy key, secret, ACME email · AES-256-GCM</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <p>The key comes from <code>PROXYGATE_CONFIG_KEY</code> when it is set (64 hex characters, for example from <code>openssl rand -hex 32</code>). Otherwise ProxyGate creates <code>data/secret.key</code> with mode 0600 the first time it stores a credential. Existing plaintext configs are encrypted the next time ProxyGate starts.</p>
+                        <p>This protects the config file when it travels on its own: in a backup, a commit, or a paste into an issue. It does not protect against someone who can read the data directory, because the key file is there too. Keep <code>secret.key</code> out of backups that leave the machine, or set <code>PROXYGATE_CONFIG_KEY</code> from somewhere else.</p>
+                        <p>If the key is missing or wrong, ProxyGate still starts and serves every route. The credentials are treated as empty, the encrypted values stay in the file untouched, and the admin UI shows what happened. Enter them again, or restore the key and restart.</p>
+                        <p>TLS private keys in <code>certs/</code> are plain files readable only by the service user, as with other web servers.</p>
+                    </div>
+                </div>
+            </section>
 
-        <h3>Stored credentials are encrypted</h3>
-        <p>The GoDaddy API key and secret and the ACME contact email are stored encrypted with AES-256-GCM in <code>proxygate.json</code>. The key comes from <code>PROXYGATE_CONFIG_KEY</code> when it is set (64 hex characters, for example from <code>openssl rand -hex 32</code>). Otherwise ProxyGate creates <code>data/secret.key</code> with mode 0600 the first time it stores a credential. Existing plaintext configs are encrypted the next time ProxyGate starts.</p>
-        <p>This protects the config file when it travels on its own: in a backup, a commit, or a paste into an issue. It does not protect against someone who can read the data directory, because the key file is there too. Keep <code>secret.key</code> out of backups that leave the machine, or set <code>PROXYGATE_CONFIG_KEY</code> from somewhere else.</p>
-        <p>If the key is missing or wrong, ProxyGate still starts and serves every route. The GoDaddy credentials and ACME email are treated as empty, the encrypted values stay in the file untouched, and the admin UI shows what happened. Enter the credentials again, or restore the key and restart.</p>
-        <p>TLS private keys in <code>certs/</code> are plain files readable only by the service user, as with other web servers.</p>
-
-        <h2 id="recovery">Recovering access</h2>
-        <p>Anyone who can act as the service user on the machine can set a new password:</p>
-<pre><code>sudo -u proxygate proxygate passwd --config /opt/proxygate/data/proxygate.json
+            <section class="endpoint-group" id="operations">
+                <h2>Operations</h2>
+                <p>Tasks run on the machine where ProxyGate is installed.</p>
+                <div class="endpoint" id="recovery">
+                    <div class="endpoint-header">
+                        <span class="method tag-cli">CLI</span>
+                        <span class="endpoint-path">Recovering access</span>
+                        <span class="endpoint-desc">proxygate passwd</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <p>Anyone who can act as the service user on the machine can set a new password:</p>
+                        <pre>sudo -u proxygate proxygate passwd --config /opt/proxygate/data/proxygate.json
 
 # or print a random password instead of typing one:
-sudo -u proxygate proxygate passwd --config /opt/proxygate/data/proxygate.json --generate</code></pre>
-        <p>This signs out every browser. The running server picks up the new password on the next request; no restart is needed. Run as root, the command keeps the credentials file owned by the user that owns the config, so the service can still read it.</p>
+sudo -u proxygate proxygate passwd --config /opt/proxygate/data/proxygate.json --generate</pre>
+                        <p>This signs out every browser. The running server picks up the new password on the next request; no restart is needed. Run as root, the command keeps the credentials file owned by the user that owns the config, so the service can still read it.</p>
+                    </div>
+                </div>
+                <div class="endpoint" id="upgrading">
+                    <div class="endpoint-header">
+                        <span class="method tag-cli">CLI</span>
+                        <span class="endpoint-path">Upgrading from an earlier version</span>
+                        <span class="endpoint-desc">routes keep serving</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <p>On first start the admin UI locks until a password is set with the one-time code, scripts that call the API need an API token, and stored credentials are encrypted with a new <code>data/secret.key</code>. Earlier versions can still read that config if started with <code>PROXYGATE_CONFIG_KEY=$(cat data/secret.key)</code>.</p>
+                        <p>The <a href="https://github.com/gcis/proxygate/blob/main/docs/deployment.md#upgrading-to-the-version-with-admin-login">deployment guide</a> has the full upgrade and rollback steps.</p>
+                    </div>
+                </div>
+            </section>
 
-        <h2 id="advanced">Advanced settings</h2>
-        <p>These live in the <code>security</code> section of <code>proxygate.json</code> and take effect after a restart. Leave them out to keep the defaults.</p>
-<pre><code>"security": {
+            <section class="endpoint-group" id="advanced">
+                <h2>Advanced settings</h2>
+                <p>These live in the <code>security</code> section of <code>proxygate.json</code> and take effect after a restart. Leave them out to keep the defaults.</p>
+                <pre class="group-pre">"security": {
   "admin_tls": { "enabled": true, "cert_file": "", "key_file": "" },
   "require_secure_login": true,
   "session_idle_timeout": "2h",
   "session_max_age": "24h",
   "encrypt_secrets": true
-}</code></pre>
-        <div class="table-scroll">
-            <table>
-                <thead><tr><th>Setting</th><th>Default</th><th>Effect</th></tr></thead>
-                <tbody>
-                    <tr><td><code>admin_tls.enabled</code></td><td><code>false</code></td><td>Serve the admin UI and API over HTTPS instead of HTTP.</td></tr>
-                    <tr><td><code>admin_tls.cert_file</code>, <code>key_file</code></td><td>empty</td><td>Certificate to use. When empty, ProxyGate creates a self-signed certificate in <code>data/</code> covering <code>localhost</code>, the machine's hostname and its current IP addresses, and logs its SHA-256 fingerprint so you can compare it with the one your browser shows.</td></tr>
-                    <tr><td><code>require_secure_login</code></td><td><code>false</code></td><td>Refuse setup, sign-in and password changes unless the connection is HTTPS or comes from localhost.</td></tr>
-                    <tr><td><code>session_idle_timeout</code></td><td><code>"12h"</code></td><td>Sign out after this long without activity.</td></tr>
-                    <tr><td><code>session_max_age</code></td><td><code>"168h"</code></td><td>Sign out after this long regardless of activity.</td></tr>
-                    <tr><td><code>encrypt_secrets</code></td><td><code>true</code></td><td>Set to <code>false</code> to store the GoDaddy credentials and ACME email in plaintext. Values that are already encrypted are still decrypted.</td></tr>
-                </tbody>
-            </table>
-        </div>
-        <h3>Strong password rules</h3>
-        <p>Strong rules are chosen when the password is first set: a checkbox on the setup screen, or <code>proxygate passwd --policy strong</code>. They require at least 12 characters and reject very common passwords and passwords containing "proxygate". This follows NIST SP 800-63B, which favours length and a blocklist over forced character classes. The choice applies to every later password change; <code>proxygate passwd --policy basic</code> relaxes it again.</p>
-        <p>The network allowlist (<code>server.allowed_networks</code>) and the admin address (<code>server.admin_host</code>, <code>127.0.0.1</code> by default) remain the first line of defence.</p>
+}</pre>
+                <div class="endpoint" id="admin-tls">
+                    <div class="endpoint-header">
+                        <span class="method tag-optin">OPT-IN</span>
+                        <span class="endpoint-path">admin_tls</span>
+                        <span class="endpoint-desc">default: off</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <p>Serve the admin UI and API over HTTPS. Set <code>cert_file</code> and <code>key_file</code> to use your own certificate. When they are empty, ProxyGate creates a self-signed certificate in <code>data/</code> covering <code>localhost</code>, the machine's hostname and its current IP addresses, and logs its SHA-256 fingerprint so you can compare it with the one your browser shows.</p>
+                    </div>
+                </div>
+                <div class="endpoint" id="require-secure-login">
+                    <div class="endpoint-header">
+                        <span class="method tag-optin">OPT-IN</span>
+                        <span class="endpoint-path">require_secure_login</span>
+                        <span class="endpoint-desc">default: false</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <p>Refuse setup, sign-in and password changes unless the connection is HTTPS or comes from localhost.</p>
+                    </div>
+                </div>
+                <div class="endpoint" id="session-lifetimes">
+                    <div class="endpoint-header">
+                        <span class="method tag-optin">OPT-IN</span>
+                        <span class="endpoint-path">session_idle_timeout · session_max_age</span>
+                        <span class="endpoint-desc">defaults: 12h · 168h</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <p>Sign out after this long without activity, and after this long regardless of activity. Values use Go duration syntax such as <code>"30m"</code>, <code>"2h"</code> or <code>"24h"</code>.</p>
+                    </div>
+                </div>
+                <div class="endpoint" id="encrypt-secrets">
+                    <div class="endpoint-header">
+                        <span class="method tag-optin">OPT-IN</span>
+                        <span class="endpoint-path">encrypt_secrets</span>
+                        <span class="endpoint-desc">default: true</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <p>Set to <code>false</code> to store the GoDaddy credentials and ACME email in plaintext. Values that are already encrypted are still decrypted.</p>
+                    </div>
+                </div>
+                <div class="endpoint" id="strong-passwords">
+                    <div class="endpoint-header">
+                        <span class="method tag-optin">OPT-IN</span>
+                        <span class="endpoint-path">Strong password rules</span>
+                        <span class="endpoint-desc">chosen at first setup</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <p>A checkbox on the setup screen, or <code>proxygate passwd --policy strong</code>. Requires at least 12 characters and rejects very common passwords and passwords containing "proxygate", following NIST SP 800-63B, which favours length and a blocklist over forced character classes. The choice applies to every later password change; <code>proxygate passwd --policy basic</code> relaxes it again.</p>
+                    </div>
+                </div>
+                <p class="group-note">The network allowlist (<code>server.allowed_networks</code>) and the admin address (<code>server.admin_host</code>, <code>127.0.0.1</code> by default) remain the first line of defence.</p>
+            </section>
 
-        <h2 id="hardening">Suggested hardening</h2>
-        <p>For an installation reachable from more than one machine:</p>
-        <ol>
-            <li>Keep <code>admin_host</code> on <code>127.0.0.1</code> and reach the UI over SSH or Tailscale, or enable <code>admin_tls</code> and <code>require_secure_login</code>.</li>
-            <li>Allow only the addresses that need the UI in <code>allowed_networks</code>.</li>
-            <li>Choose strong password rules at setup.</li>
-            <li>Set <code>PROXYGATE_CONFIG_KEY</code> from your service manager instead of relying on <code>data/secret.key</code>.</li>
-            <li>Give ProxyGate DNS credentials with no more access than you are comfortable with. GoDaddy API keys cover the whole account, and scoping that is up to you, for example by delegating <code>_acme-challenge</code> records to a zone you can restrict.</li>
-        </ol>
-
-        <h2 id="upgrading">Upgrading from an earlier version</h2>
-        <p>Routes keep serving through the upgrade. On first start the admin UI locks until a password is set with the one-time code, scripts that call the API need an API token, and stored credentials are encrypted with a new <code>data/secret.key</code>. Earlier versions can still read that config if started with <code>PROXYGATE_CONFIG_KEY=$(cat data/secret.key)</code>; the <a href="https://github.com/gcis/proxygate/blob/main/docs/deployment.md#upgrading-to-the-version-with-admin-login">deployment guide</a> has the full upgrade and rollback steps.</p>
-
-        <h2 id="roadmap">Roadmap</h2>
-        <p>Planned, not yet implemented:</p>
-        <ul>
-            <li><strong>Two-factor authentication:</strong> TOTP first, then passkeys (WebAuthn needs the admin UI on HTTPS or localhost).</li>
-            <li><strong>Stronger secret storage:</strong> systemd credentials (<code>LoadCredentialEncrypted</code>, TPM-backed where available) on systemd hosts.</li>
-            <li><strong>Audit log:</strong> an append-only record of admin changes with time, address and what changed.</li>
-            <li><strong>Dependency scanning:</strong> <code>govulncheck</code> in CI, and updating <code>github.com/gorilla/websocket</code> past advisory GO-2026-6278 and <code>golang.org/x/crypto</code> past v0.31.0.</li>
-        </ul>
-
-        <h2 id="reporting">Reporting a vulnerability</h2>
-        <p>Please open a <a href="https://github.com/gcis/proxygate/security/advisories/new">private security advisory</a> on GitHub rather than a public issue.</p>
-    </main>
+            <section class="endpoint-group" id="guidance">
+                <h2>Guidance</h2>
+                <p>Recommendations and what's coming.</p>
+                <div class="endpoint" id="hardening">
+                    <div class="endpoint-header">
+                        <span class="method tag-muted">GUIDE</span>
+                        <span class="endpoint-path">Suggested hardening</span>
+                        <span class="endpoint-desc">for an installation reachable from more than one machine</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <ol>
+                            <li>Keep <code>admin_host</code> on <code>127.0.0.1</code> and reach the UI over an SSH tunnel or a VPN, or enable <code>admin_tls</code> and <code>require_secure_login</code>.</li>
+                            <li>Allow only the addresses that need the UI in <code>allowed_networks</code>.</li>
+                            <li>Choose strong password rules at setup.</li>
+                            <li>Set <code>PROXYGATE_CONFIG_KEY</code> from your service manager instead of relying on <code>data/secret.key</code>.</li>
+                            <li>Give ProxyGate DNS credentials with no more access than you are comfortable with. GoDaddy API keys cover the whole account, and scoping that is up to you, for example by delegating <code>_acme-challenge</code> records to a zone you can restrict.</li>
+                        </ol>
+                    </div>
+                </div>
+                <div class="endpoint" id="roadmap">
+                    <div class="endpoint-header">
+                        <span class="method tag-planned">PLANNED</span>
+                        <span class="endpoint-path">Roadmap</span>
+                        <span class="endpoint-desc">not yet implemented</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <ul>
+                            <li><strong>Two-factor authentication:</strong> TOTP first, then passkeys (WebAuthn needs the admin UI on HTTPS or localhost).</li>
+                            <li><strong>Stronger secret storage:</strong> systemd credentials (<code>LoadCredentialEncrypted</code>, TPM-backed where available) on systemd hosts.</li>
+                            <li><strong>Audit log:</strong> an append-only record of admin changes with time, address and what changed.</li>
+                            <li><strong>Dependency scanning:</strong> <code>govulncheck</code> in CI, and updating <code>github.com/gorilla/websocket</code> past advisory GO-2026-6278 and <code>golang.org/x/crypto</code> past v0.31.0.</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="endpoint" id="reporting">
+                    <div class="endpoint-header">
+                        <span class="method tag-muted">REPORT</span>
+                        <span class="endpoint-path">Reporting a vulnerability</span>
+                        <span class="endpoint-desc">privately, not in a public issue</span>
+                    </div>
+                    <div class="endpoint-details">
+                        <p>Please open a <a href="https://github.com/gcis/proxygate/security/advisories/new">private security advisory</a> on GitHub.</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
 
     <footer class="site-footer">
         <div class="site-footer-inner">
@@ -140,6 +346,6 @@ sudo -u proxygate proxygate passwd --config /opt/proxygate/data/proxygate.json -
         </div>
     </footer>
 
-    <script src="docs.js"></script>
+    <script src="docs.js?v=20261127"></script>
 </body>
 </html>

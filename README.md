@@ -4,7 +4,7 @@
 [![Coverage](https://codecov.io/gh/gcis/proxygate/branch/main/graph/badge.svg?cachebust=2)](https://codecov.io/gh/gcis/proxygate)
 [![Docs](https://img.shields.io/badge/docs-online-blue)](https://gcis.github.io/proxygate/)
 
-A lightweight, self-hosted reverse proxy with a built-in web UI for managing routes, TLS certificates (Let's Encrypt), and DNS records (GoDaddy).
+Trusted HTTPS for your private services, without opening a port. ProxyGate gives the services on your LAN, VPN or home server their own domains and browser-trusted Let's Encrypt certificates. It proves domain ownership through your GoDaddy DNS (the DNS-01 challenge) instead of letting Let's Encrypt connect to your machine, and manages routes, certificates and DNS records from one small web UI.
 
 ## Documentation
 
@@ -14,17 +14,13 @@ Full docs: <https://gcis.github.io/proxygate/>
 
 ## Features
 
-- **Reverse Proxy** — Route HTTP/HTTPS/WebSocket traffic by domain name to local services
-- **Web Dashboard** — Manage everything through a clean, modern UI
-- **Let's Encrypt Integration** — Request free TLS certificates via DNS-01 challenge with step-by-step UI guidance
-- **Automatic Certificate Renewal** — Background daily check; certs are renewed 30 days before expiry and hot-reloaded with no restart
-- **GoDaddy DNS Management** — Create/manage DNS records directly from the UI with API key integration
-- **Automatic DNS + Cert** — One-click: create DNS record via GoDaddy, verify, and install certificate
-- **Config Encryption** — AES-256-GCM encryption for sensitive config fields (GoDaddy credentials, ACME email) at rest; key supplied via environment variable
-- **Live Reload** — WebSocket-powered real-time updates across all UI components
-- **Hot Config Reload** — Change routes without restarting the proxy
-- **Admin Network Whitelist** — Restrict admin UI access by IP/CIDR, configurable via CLI or UI
-- **Single Binary** — No external dependencies, UI embedded in the Go binary
+- **Certificates for private services** — DNS-01 via GoDaddy means services reachable only on your LAN or VPN get browser-trusted certificates, with no inbound ports opened
+- **Routes, certificates and DNS in one UI** — add a route, request a certificate (the challenge TXT record is published for you), and create A/CNAME records without leaving the page
+- **Automatic renewal** — a daily check renews certificates with 30 days or fewer left and hot-reloads them without a restart (renewal needs GoDaddy credentials)
+- **Domain and path routing** — longest path prefix wins; WebSocket and server-sent events pass through; route changes apply live
+- **Small footprint** — one ~3.5 MB download, no Docker or database, one JSON config; about 14 MB of RAM and 0.1% CPU with six routes on a small ARM edge device; starts in about 10 ms; binds ports 80/443 without root
+- **Locked-down admin** — password with a one-time setup code and `proxygate passwd` recovery, API tokens for scripts, localhost-only by default, network allowlist, GoDaddy credentials encrypted at rest by default
+- **Optional hardening** — HTTPS for the admin UI, refusing logins over plain HTTP, session lifetimes and strong password rules ([security guide](https://gcis.github.io/proxygate/security.html))
 
 ## Screenshots
 

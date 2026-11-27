@@ -39,8 +39,8 @@ func TestExtractBaseDomain(t *testing.T) {
 		{"*.example.com", "example.com"},
 		{"_acme-challenge.example.com", "example.com"},
 		{"_acme-challenge.sub.example.com", "example.com"},
-		{"simply.testdomain.io", "testdomain.io"},
-		{"_acme-challenge.simply.testdomain.io", "testdomain.io"},
+		{"app.testdomain.io", "testdomain.io"},
+		{"_acme-challenge.app.testdomain.io", "testdomain.io"},
 		{"example.co.uk", "co.uk"}, // simple two-label extraction
 	}
 
@@ -212,7 +212,7 @@ func TestCreateRecord_SendsRecordAsArray(t *testing.T) {
 
 func TestCreateTXTRecord_UsesRelativeNameForGoDaddy(t *testing.T) {
 	// The GoDaddy API expects record names relative to the zone (base domain).
-	// e.g. "_acme-challenge.simply" not "_acme-challenge.simply.testdomain.io"
+	// e.g. "_acme-challenge.app" not "_acme-challenge.app.testdomain.io"
 	var body []byte
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ = io.ReadAll(r.Body)
@@ -221,9 +221,9 @@ func TestCreateTXTRecord_UsesRelativeNameForGoDaddy(t *testing.T) {
 	defer srv.Close()
 
 	c := newTestClient(srv)
-	// Simulates what ACME handler passes: fullDomain="simply.testdomain.io",
-	// name="_acme-challenge.simply.testdomain.io" (absolute FQDN).
-	err := c.CreateTXTRecord(context.Background(), "simply.testdomain.io", "_acme-challenge.simply.testdomain.io", "token123")
+	// Simulates what ACME handler passes: fullDomain="app.testdomain.io",
+	// name="_acme-challenge.app.testdomain.io" (absolute FQDN).
+	err := c.CreateTXTRecord(context.Background(), "app.testdomain.io", "_acme-challenge.app.testdomain.io", "token123")
 	if err != nil {
 		t.Fatalf("CreateTXTRecord: %v", err)
 	}
@@ -235,12 +235,12 @@ func TestCreateTXTRecord_UsesRelativeNameForGoDaddy(t *testing.T) {
 	if len(records) != 1 {
 		t.Fatalf("want 1 record, got %d", len(records))
 	}
-	// Should be relative: "_acme-challenge.simply" not the full FQDN.
+	// Should be relative: "_acme-challenge.app" not the full FQDN.
 	if strings.Contains(records[0].Name, ".testdomain.io") {
 		t.Errorf("record name should be relative to zone, got %q", records[0].Name)
 	}
-	if records[0].Name != "_acme-challenge.simply" {
-		t.Errorf("record name: want _acme-challenge.simply, got %q", records[0].Name)
+	if records[0].Name != "_acme-challenge.app" {
+		t.Errorf("record name: want _acme-challenge.app, got %q", records[0].Name)
 	}
 	if records[0].Data != "token123" {
 		t.Errorf("record data: want token123, got %q", records[0].Data)

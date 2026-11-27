@@ -238,8 +238,8 @@ func (c *Client) CreateTXTRecord(ctx context.Context, fullDomain, name, value st
 	baseDomain := extractBaseDomain(fullDomain)
 
 	// GoDaddy API expects record names relative to the base domain.
-	// Convert absolute FQDN (e.g. "_acme-challenge.simply.example.io") to relative
-	// (e.g. "_acme-challenge.simply") by stripping the ".baseDomain" suffix.
+	// Convert absolute FQDN (e.g. "_acme-challenge.app.example.io") to relative
+	// (e.g. "_acme-challenge.app") by stripping the ".baseDomain" suffix.
 	relName := strings.TrimSuffix(name, "."+baseDomain)
 
 	record := DNSRecord{

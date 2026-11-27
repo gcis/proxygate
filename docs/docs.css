@@ -254,6 +254,128 @@ a:hover {
     max-width: 22ch;
 }
 
+/* Hero proof points: a row of stat blocks */
+.proof-strip {
+    display: grid;
+    grid-template-columns: repeat(4, auto);
+    justify-content: start;
+    margin-top: 36px;
+    border-top: 1px solid var(--border);
+}
+
+.proof {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 16px 28px 0 0;
+    margin-right: 28px;
+    border-right: 1px solid var(--border);
+}
+
+.proof:last-child {
+    border-right: none;
+    margin-right: 0;
+}
+
+.proof-num {
+    font-family: var(--font-mono);
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--white);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.proof-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+@media (max-width: 720px) {
+    .proof-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        row-gap: 4px;
+    }
+    .proof,
+    .proof:last-child {
+        border-right: none;
+        margin-right: 0;
+        padding-right: 12px;
+    }
+}
+
+/* What it fixes */
+.why-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px;
+}
+
+.why-item {
+    border-top: 2px solid var(--emerald);
+    padding-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.why-item h3 {
+    font-size: 1.02rem;
+    font-weight: 600;
+    color: var(--white);
+}
+
+.why-item p {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+/* Is it right for you? */
+.fit-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+}
+
+.fit-col {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-surface);
+    padding: 22px;
+}
+
+.fit-col h3 {
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    margin-bottom: 12px;
+}
+
+.fit-yes h3 { color: var(--emerald); }
+.fit-no h3 { color: var(--saffron); }
+
+.fit-col ul {
+    padding-left: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.why-item code,
+.cap-item code {
+    font-family: var(--font-mono);
+    font-size: 0.86em;
+    color: var(--text-primary);
+}
+
+@media (max-width: 860px) {
+    .why-grid,
+    .fit-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* Admin UI screenshots */
 .shot {
     margin: 0;
@@ -680,7 +802,22 @@ a:hover {
 }
 
 @media (max-width: 720px) {
+    /* Keep the same menu on phones: a second row that wraps if needed. */
+    .site-header-inner {
+        height: auto;
+        flex-wrap: wrap;
+        row-gap: 0;
+        padding-top: 12px;
+        padding-bottom: 0;
+    }
     .site-nav {
+        order: 3;
+        flex-basis: 100%;
+        flex-wrap: wrap;
+        gap: 8px 20px;
+        padding: 10px 0 12px;
+    }
+    .site-nav::-webkit-scrollbar {
         display: none;
     }
     .cap-grid {
@@ -695,121 +832,205 @@ a:hover {
     }
 }
 
-/* Long-form pages (security guide) */
-.prose {
-    max-width: 780px;
-    padding-block: 56px 72px;
+/* Honour the hidden attribute even on elements styled with display rules. */
+[hidden] {
+    display: none !important;
+}
+
+/* Lists: markers sit inside the text column, aligned with headings and
+   paragraphs; wrapped lines align with the first line's text. */
+.fit-col ul {
+    list-style: none;
+}
+
+.fit-col ul > li {
+    position: relative;
+    padding-left: 18px;
+}
+
+.fit-col ul > li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.62em;
+    width: 6px;
+    height: 6px;
+    background: var(--text-muted);
+}
+
+.fit-yes ul > li::before { background: var(--emerald); }
+.fit-no ul > li::before { background: var(--saffron); }
+
+/* Security reference: card labels, legend, tables and lists inside cards */
+.method { white-space: nowrap; }
+.method.tag-default { color: var(--emerald); }
+.method.tag-optin { color: var(--saffron); }
+.method.tag-cli { color: var(--white); }
+.method.tag-planned,
+.method.tag-muted { color: var(--text-muted); }
+
+.tag-legend {
     display: flex;
-    flex-direction: column;
-    gap: 16px;
+    flex-wrap: wrap;
+    gap: 6px 22px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
 }
 
-.prose h1 {
+.tag-legend .method {
+    min-width: 0;
+    margin-right: 6px;
+}
+
+.endpoint-group > pre {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    overflow-x: auto;
     font-family: var(--font-mono);
-    font-size: clamp(1.9rem, 3.5vw, 2.5rem);
-    letter-spacing: -0.02em;
-    line-height: 1.15;
-    text-wrap: balance;
-}
-
-.prose h2 {
-    font-family: var(--font-mono);
-    font-size: 1.3rem;
-    margin-top: 32px;
-    padding-top: 20px;
-    border-top: 1px solid var(--border);
-}
-
-.prose h3 {
-    font-size: 1.02rem;
-    font-weight: 600;
-    margin-top: 12px;
-}
-
-.prose p,
-.prose li {
-    color: var(--text-secondary);
-    font-size: 0.95rem;
-    line-height: 1.65;
-}
-
-.prose ul,
-.prose ol {
-    padding-left: 22px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.prose strong {
+    font-size: 0.8rem;
+    line-height: 1.6;
     color: var(--text-primary);
 }
 
-.prose a {
+.group-note {
+    font-size: 0.86rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+.group-note code {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
     color: var(--emerald);
 }
 
-.prose :not(pre) > code {
-    font-family: var(--font-mono);
-    font-size: 0.86em;
-    color: var(--text-primary);
-    background: var(--bg-elevated);
-    padding: 1px 5px;
-    border-radius: var(--radius-sm);
-    overflow-wrap: anywhere;
+.endpoint-details pre + p,
+.endpoint-details .table-scroll + p {
+    margin-top: 12px;
 }
 
-.prose pre {
-    background: var(--bg-surface);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius);
-    padding: 14px 16px;
-    overflow-x: auto;
-    font-family: var(--font-mono);
-    font-size: 0.82rem;
-    line-height: 1.6;
+.endpoint-details pre {
+    margin-top: 10px;
 }
 
-.table-scroll {
-    overflow-x: auto;
+.endpoint-details a {
+    color: var(--emerald);
+}
+
+.endpoint-details .table-scroll {
     border: 1px solid var(--border);
     border-radius: var(--radius);
+    overflow-x: auto;
 }
 
-.prose table {
+.endpoint-details table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.88rem;
+    font-size: 0.84rem;
 }
 
-.prose th,
-.prose td {
+.endpoint-details th,
+.endpoint-details td {
     text-align: left;
     vertical-align: top;
-    padding: 10px 12px;
+    padding: 9px 12px;
     border-bottom: 1px solid var(--border);
     color: var(--text-secondary);
 }
 
-.prose th {
+.endpoint-details th {
     font-family: var(--font-mono);
-    font-size: 0.76rem;
-    font-weight: 600;
+    font-size: 0.74rem;
     color: var(--text-muted);
+    background: var(--bg-canvas);
+}
+
+.endpoint-details tr:last-child td { border-bottom: none; }
+.endpoint-details td:first-child { color: var(--text-primary); white-space: nowrap; }
+
+.endpoint-details ul,
+.endpoint-details ol {
+    list-style: none;
+    padding-left: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 0.84rem;
+    color: var(--text-secondary);
+}
+
+.endpoint-details ul > li,
+.endpoint-details ol > li {
+    position: relative;
+    padding-left: 22px;
+}
+
+.endpoint-details ul > li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.6em;
+    width: 6px;
+    height: 6px;
+    background: var(--text-muted);
+}
+
+.endpoint-details ol { counter-reset: step; }
+.endpoint-details ol > li { counter-increment: step; }
+.endpoint-details ol > li::before {
+    content: counter(step) ".";
+    position: absolute;
+    left: 0;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.endpoint-details strong { color: var(--text-primary); }
+
+/* GitHub link in the menu, styled as a shell prompt */
+.site-nav a.gh-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
     background: var(--bg-surface);
-}
-
-.prose tr:last-child td {
-    border-bottom: none;
-}
-
-.prose td:first-child,
-.prose td:nth-child(2) code {
-    white-space: nowrap;
     color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    line-height: 1.2;
+    transition: border-color 0.15s var(--ease), color 0.15s var(--ease);
 }
 
-/* Honour the hidden attribute even on elements styled with display rules. */
-[hidden] {
-    display: none !important;
+.site-nav a.gh-btn:hover,
+.site-nav a.gh-btn:focus-visible {
+    border-color: var(--emerald);
+    border-bottom-color: var(--emerald);
+    color: var(--white);
+}
+
+.gh-prompt {
+    color: var(--emerald);
+    font-weight: 600;
+}
+
+.gh-arrow {
+    color: var(--text-muted);
+    font-size: 0.85em;
+    transition: transform 0.15s var(--ease), color 0.15s var(--ease);
+}
+
+.site-nav a.gh-btn:hover .gh-arrow {
+    color: var(--emerald);
+    transform: translate(1px, -1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .site-nav a.gh-btn,
+    .gh-arrow { transition: none; }
 }

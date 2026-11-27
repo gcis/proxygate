@@ -9,8 +9,11 @@ import (
 
 // matchOwnership gives file the owner of reference when running as root, so
 // `sudo proxygate passwd` does not leave a file the service user cannot read.
+// geteuid is swappable so tests can exercise the root-only path.
+var geteuid = os.Geteuid
+
 func matchOwnership(reference, file string) {
-	if os.Geteuid() != 0 {
+	if geteuid() != 0 {
 		return
 	}
 	info, err := os.Stat(reference)
